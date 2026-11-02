@@ -144,3 +144,16 @@ button.row:hover { background: var(--bg); }
 .inline input { flex: 1; min-width: 0; }
 .creds { border-color: var(--accent); }
 .creds-text { margin: 0; padding: 12px; background: var(--bg); border-radius: 10px; white-space: pre-wrap; overflow-wrap: anywhere; font: 14px/1.5 ui-monospace, Menlo, monospace; user-select: all; }
+
+/* ---- Photos de profil ---- */
+.av { background-size: cover; background-position: center; overflow: hidden; }
+.av.photo { color: transparent; }
+.av.mini { width: 22px; height: 22px; font-size: 11px; }
+.av.big { width: 120px; height: 120px; font-size: 44px; }
+.msg .who { display: flex; align-items: center; gap: 6px; }
+.me-btn { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; border: 0; background: none; padding: 0; text-align: left; }
+.me-btn .av { width: 36px; height: 36px; }
+.profile-card { align-items: center; text-align: center; }
+.profile-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.profile-actions label.btn { display: inline-block; color: var(--accent-fg); font-size: 15px; cursor: pointer; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }

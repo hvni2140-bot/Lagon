@@ -33,11 +33,13 @@
   <section id="app" class="app" hidden>
     <aside class="side">
       <header class="side-head">
-        <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="var(--accent)"/><path d="M4 19c4-3 8 3 12 0s8 3 12 0v6a12 12 0 0 1-24 0z" fill="var(--accent-fg)" opacity=".85"/></svg>
-        <div class="grow">
-          <h1 class="brand">Lagon</h1>
-          <div class="muted small" id="me-name"></div>
-        </div>
+        <button class="me-btn" id="btn-me" type="button" aria-label="Mon profil">
+          <div class="av" id="me-av"></div>
+          <div class="grow">
+            <h1 class="brand">Lagon</h1>
+            <div class="muted small" id="me-name"></div>
+          </div>
+        </button>
         <button class="pill" id="btn-admin" hidden>Gestion</button>
         <button class="pill ghost" id="btn-logout">Déconnexion</button>
       </header>
@@ -87,6 +89,29 @@
         <div class="panel-body">
           <input id="picker-search" class="search" placeholder="Rechercher un membre" aria-label="Rechercher un membre">
           <div id="picker-list" class="list"></div>
+        </div>
+      </section>
+
+      <!-- Mon profil -->
+      <section id="profile" class="panel-view" hidden>
+        <header class="chat-head">
+          <button class="back show" id="profile-back" aria-label="Retour">‹</button>
+          <div class="chat-title">Mon profil</div>
+        </header>
+        <div class="panel-body">
+          <div class="card profile-card">
+            <div class="av big" id="pf-av"></div>
+            <div class="profile-actions">
+              <label class="btn" for="pf-file"><span id="pf-pick-label">Changer la photo</span></label>
+              <input type="file" id="pf-file" accept="image/*" class="visually-hidden">
+              <button class="btn soft" type="button" id="pf-remove" hidden>Retirer la photo</button>
+            </div>
+          </div>
+          <form id="pf-form" class="card" novalidate>
+            <label>Nom affiché<input id="pf-name" maxlength="40"></label>
+            <p class="err" id="pf-err" hidden></p>
+            <button class="btn" type="submit">Enregistrer le nom</button>
+          </form>
         </div>
       </section>
 

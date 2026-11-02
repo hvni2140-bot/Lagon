@@ -42,6 +42,22 @@ function fmtBytes(b) { return b >= 1e6 ? Math.round(b / 1e6) + " Mo" : Math.roun
 function convTitle(c) { return c.is_group ? (c.title || "Groupe") : nameOf(c.other); }
 function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 
+// Photo de profil : un rond avec l'initiale, remplacé par la photo quand elle existe.
+function fillAvatar(box, id) {
+  const p = S.profiles.get(id), name = (p && p.display_name) || "?";
+  box.textContent = initial(name);
+  box.style.backgroundImage = "";
+  box.classList.remove("photo");
+  if (p && p.avatar_path) {
+    signedUrl("avatars", p.avatar_path).then((u) => {
+      const now = S.profiles.get(id); if (!now || now.avatar_path !== p.avatar_path) return;
+      box.style.backgroundImage = `url("${u}")`; box.textContent = ""; box.classList.add("photo");
+    }).catch(() => {});
+  }
+  return box;
+}
+const avatar = (id, extra = "") => fillAvatar(el("div", "av" + extra), id);
+
 /* ---------- démarrage ---------- */
 if (!cfg.SUPABASE_URL || cfg.SUPABASE_URL.includes("VOTRE-PROJET") || !cfg.SUPABASE_ANON_KEY || cfg.SUPABASE_ANON_KEY.includes("VOTRE")) {
   $("setup").hidden = false;
@@ -98,7 +114,7 @@ async function enter(session) {
   await loadConvs();
   subscribe();
   $("auth").hidden = true; $("app").hidden = false;
-  $("me-name").textContent = me.display_name + (me.is_admin ? " · gérant" : "");
+  renderMe();
   $("btn-admin").hidden = !me.is_admin;
   const group = S.convs.find((c) => c.is_group);
   if (group && matchMedia("(min-width: 761px)").matches) openConv(group.id);
@@ -189,7 +205,7 @@ function renderConvs() {
     const b = el("button", "conv"); b.type = "button";
     if (c.id === S.current) b.setAttribute("aria-current", "true");
     const title = convTitle(c);
-    const av = el("div", "av" + (c.is_group ? " group" : ""), c.is_group ? "#" : initial(title));
+    const av = c.is_group ? el("div", "av group", "#") : avatar(c.other);
     const mid = el("div", "grow");
     const nm = el("div", "name", title);
     if (!c.is_group) nm.insertAdjacentHTML("beforeend", '<svg class="lock" viewBox="0 0 24 24" fill="currentColor" aria-label="Privée"><path d="M6 10V8a6 6 0 1 1 12 0v2h1v12H5V10zm2 0h8V8a4 4 0 1 0-8 0z"/></svg>');
@@ -212,7 +228,7 @@ function renderConvs() {
 /* ---------- navigation ---------- */
 function showView(v) {
   S.view = v;
-  $("chat").hidden = v !== "chat"; $("picker").hidden = v !== "picker"; $("admin").hidden = v !== "admin";
+  $("chat").hidden = v !== "chat"; $("picker").hidden = v !== "picker"; $("admin").hidden = v !== "admin"; $("profile").hidden = v !== "profile";
   $("app").classList.add("in-chat");
 }
 function showList() { $("app").classList.remove("in-chat"); }
@@ -220,6 +236,7 @@ $("btn-back").onclick = showList;
 function backFromPanel() { if (S.current) showView("chat"); else { showView("chat"); showList(); } }
 $("picker-back").onclick = backFromPanel;
 $("admin-back").onclick = backFromPanel;
+$("profile-back").onclick = backFromPanel;
 
 async function openConv(cid) {
   if (S.current !== cid) { nodes.clear(); $("thread").replaceChildren(); S.sel = null; S.confirm = null; }
@@ -228,8 +245,8 @@ async function openConv(cid) {
   const c = S.convs.find((x) => x.id === cid); if (!c) return;
   const title = convTitle(c);
   $("chat-title").textContent = title;
-  $("chat-av").textContent = c.is_group ? "#" : initial(title);
   $("chat-av").className = "av" + (c.is_group ? " group" : "");
+  if (c.is_group) { $("chat-av").style.backgroundImage = ""; $("chat-av").textContent = "#"; } else fillAvatar($("chat-av"), c.other);
   $("chat-sub").textContent = c.is_group ? S.profiles.size + (S.profiles.size > 1 ? " membres" : " membre") : "Discussion privée · visible uniquement par vous deux";
   const blocked = S.me.blocked;
   $("composer").hidden = blocked; $("blocked-note").hidden = !blocked;
@@ -239,14 +256,15 @@ async function openConv(cid) {
 }
 
 /* ---------- messages ---------- */
-async function mediaUrl(path) {
-  const hit = urlCache.get(path);
+async function signedUrl(bucket, path) {
+  const key = bucket + "/" + path, hit = urlCache.get(key);
   if (hit && hit.exp > Date.now()) return hit.url;
-  const { data, error } = await sb.storage.from("media").createSignedUrl(path, 3600);
+  const { data, error } = await sb.storage.from(bucket).createSignedUrl(path, 3600);
   if (error) throw error;
-  urlCache.set(path, { url: data.signedUrl, exp: Date.now() + 50 * 60 * 1000 });
+  urlCache.set(key, { url: data.signedUrl, exp: Date.now() + 50 * 60 * 1000 });
   return data.signedUrl;
 }
+const mediaUrl = (path) => signedUrl("media", path);
 
 function atBottom() { const s = $("scroll"); return s.scrollHeight - s.scrollTop - s.clientHeight < 80; }
 function keepBottom() { if (stickBottom) $("scroll").scrollTop = $("scroll").scrollHeight; }
@@ -296,7 +314,8 @@ function renderThread() {
     const first = !prev || prev.sender_id !== m.sender_id || Date.parse(m.created_at) - Date.parse(prev.created_at) > 5 * 60000;
     n.classList.toggle("mine", own); n.classList.toggle("first", first);
     const r = n._r, selected = S.sel === m.id;
-    r.who.hidden = own || !first || !c?.is_group; r.who.textContent = nameOf(m.sender_id);
+    r.who.hidden = own || !first || !c?.is_group;
+    if (!r.who.hidden) { r.who.replaceChildren(avatar(m.sender_id, " mini"), el("span", null, nameOf(m.sender_id))); }
     r.meta.textContent = hhmm(m.created_at); r.meta.hidden = !(first || selected);
     const canDel = own || (S.me.is_admin && c?.is_group);
     r.tools.hidden = !(selected && canDel);
@@ -384,7 +403,7 @@ function renderPicker() {
   if (!people.length) { list.append(el("div", "row muted", q ? "Aucun membre ne correspond." : "Aucun autre membre pour l'instant. Invitez des personnes à créer un compte.")); return; }
   for (const p of people) {
     const b = el("button", "row"); b.type = "button";
-    b.append(el("div", "av", initial(p.display_name)), el("div", "grow", p.display_name));
+    b.append(avatar(p.id), el("div", "grow", p.display_name));
     b.onclick = async () => {
       b.disabled = true;
       const { data, error } = await sb.rpc("open_dm", { other: p.id });
@@ -457,7 +476,7 @@ function renderAdmin() {
     const who = el("div", "grow");
     const sub = p.login ? "Identifiant : " + p.login : "Connexion par email";
     who.append(el("b", null, p.display_name + (p.id === S.me.id ? " (vous)" : "")), document.createElement("br"), el("span", "muted small", sub));
-    row.append(el("div", "av", initial(p.display_name)), who);
+    row.append(avatar(p.id), who);
     if (p.is_admin) row.append(el("span", "chip admin", "Gérant"));
     if (p.blocked) row.append(el("span", "chip", "Bloqué"));
     if (p.id !== S.me.id) {
@@ -482,3 +501,67 @@ function renderAdmin() {
     list.append(row);
   }
 }
+
+/* ---------- mon profil ---------- */
+function renderMe() {
+  $("me-name").textContent = S.me.display_name + (S.me.is_admin ? " · gérant" : "");
+  fillAvatar($("me-av"), S.me.id);
+}
+function renderProfile() {
+  fillAvatar($("pf-av"), S.me.id);
+  $("pf-name").value = S.me.display_name;
+  $("pf-remove").hidden = !S.me.avatar_path;
+  $("pf-err").hidden = true;
+}
+$("btn-me").onclick = async () => { await loadProfiles(); renderProfile(); showView("profile"); };
+
+// Réduit la photo à 400 × 400 (carré centré) pour un envoi rapide.
+function squareJpeg(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const side = Math.min(img.naturalWidth, img.naturalHeight), size = Math.min(400, side);
+      const c = document.createElement("canvas"); c.width = c.height = size;
+      c.getContext("2d").drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, size, size);
+      URL.revokeObjectURL(url);
+      c.toBlob((b) => (b ? resolve(b) : reject(new Error("conversion"))), "image/jpeg", 0.85);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("lecture")); };
+    img.src = url;
+  });
+}
+
+async function setAvatar(path) {
+  const old = S.me.avatar_path;
+  const { error } = await sb.from("profiles").update({ avatar_path: path }).eq("id", S.me.id);
+  if (error) throw error;
+  if (old && old !== path) sb.storage.from("avatars").remove([old]);
+  await loadProfiles(); renderMe(); renderProfile(); renderConvs();
+  if (S.current) { nodes.clear(); $("thread").replaceChildren(); renderThread(); }
+}
+
+$("pf-file").addEventListener("change", async () => {
+  const f = $("pf-file").files[0]; $("pf-file").value = ""; if (!f) return;
+  const err = $("pf-err"); err.hidden = true;
+  if (!f.type.startsWith("image/")) { err.textContent = "Choisissez une photo."; err.hidden = false; return; }
+  $("pf-pick-label").textContent = "Envoi…";
+  try {
+    const blob = await squareJpeg(f);
+    const path = `${S.me.id}/${Date.now()}.jpg`;
+    const up = await sb.storage.from("avatars").upload(path, blob, { contentType: "image/jpeg" });
+    if (up.error) throw up.error;
+    await setAvatar(path); toast("Photo de profil mise à jour");
+  } catch { err.textContent = "La photo n'a pas pu être enregistrée. Essayez une autre image."; err.hidden = false; }
+  $("pf-pick-label").textContent = "Changer la photo";
+});
+$("pf-remove").onclick = async () => {
+  try { await setAvatar(null); toast("Photo retirée"); } catch { toast("Action impossible."); }
+};
+$("pf-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = $("pf-name").value.trim(), err = $("pf-err"); err.hidden = true;
+  if (!name || name.length > 40) { err.textContent = "Le nom doit faire entre 1 et 40 caractères."; err.hidden = false; return; }
+  const { error } = await sb.from("profiles").update({ display_name: name }).eq("id", S.me.id);
+  if (error) { err.textContent = "Le nom n'a pas pu être enregistré."; err.hidden = false; return; }
+  await loadProfiles(); renderMe(); renderConvs(); toast("Nom enregistré");
+});
