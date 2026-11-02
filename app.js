@@ -148,7 +148,8 @@ $("btn-logout").onclick = () => sb.auth.signOut();
 /* ---------- chargement ---------- */
 // Les membres ne voient que le nom, la photo et le rôle des autres.
 // Leur propre fiche complète et celle de tous (pour le gérant) passent par des fonctions dédiées.
-const PUBLIC_COLS = "id,display_name,avatar_path,is_admin,created_at";
+const PUBLIC_COLS = "id,display_name,avatar_path,is_admin,created_at,bio";
+const PUBLIC_COLS_OLD = "id,display_name,avatar_path,is_admin,created_at"; // avant l'ajout de la bio
 async function fetchMe(id) {
   const r = await sb.rpc("my_profile").single();
   if (!r.error) return r;
@@ -157,6 +158,7 @@ async function fetchMe(id) {
 async function loadProfiles() {
   let res = S.me && S.me.is_admin ? await sb.rpc("admin_profiles") : { error: true };
   if (res.error) res = await sb.from("profiles").select(S.me && S.me.is_admin ? "*" : PUBLIC_COLS).order("display_name");
+  if (res.error) res = await sb.from("profiles").select(PUBLIC_COLS_OLD).order("display_name");
   S.profiles = new Map((res.data || []).map((p) => [p.id, p]));
   if (S.me) {
     const { data: me } = await fetchMe(S.me.id);
@@ -630,6 +632,7 @@ function renderMe() {
 function renderProfile() {
   fillAvatar($("pf-av"), S.me.id);
   $("pf-name").value = S.me.display_name;
+  $("pf-bio").value = S.me.bio || ""; updateBioCount();
   $("pf-remove").hidden = !S.me.avatar_path;
   $("pf-err").hidden = true;
 }
@@ -681,9 +684,10 @@ $("pf-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const name = $("pf-name").value.trim(), err = $("pf-err"); err.hidden = true;
   if (!name || name.length > 40) { err.textContent = "Le nom doit faire entre 1 et 40 caractères."; err.hidden = false; return; }
-  const { error } = await sb.from("profiles").update({ display_name: name }).eq("id", S.me.id);
-  if (error) { err.textContent = "Le nom n'a pas pu être enregistré."; err.hidden = false; return; }
-  await loadProfiles(); renderMe(); renderConvs(); toast("Nom enregistré");
+  const bio = $("pf-bio").value.trim().slice(0, 500);
+  const { error } = await sb.from("profiles").update({ display_name: name, bio: bio || null }).eq("id", S.me.id);
+  if (error) { err.textContent = "Le profil n'a pas pu être enregistré."; err.hidden = false; return; }
+  await loadProfiles(); renderMe(); renderConvs(); toast("Profil enregistré");
 });
 
 /* ---------- page profil d'un membre ---------- */
@@ -710,6 +714,9 @@ function renderPersonHead() {
   fillAvatar($("ps-av"), id);
   $("ps-name").textContent = p.display_name || "Membre";
   $("ps-admin").hidden = !p.is_admin;
+  $("ps-bio").textContent = p.bio || (mine ? "Ajoutez une bio depuis « Mon profil » pour vous présenter." : "");
+  $("ps-bio").classList.toggle("muted", !p.bio);
+  $("ps-bio").hidden = !p.bio && !mine;
   $("ps-dm").hidden = mine;
   $("ps-add").hidden = !(mine && S.personTab === "album");
   for (const t of ["avatar", "album"]) $("ps-tab-" + t).setAttribute("aria-selected", S.personTab === t);
@@ -887,3 +894,6 @@ $("vw-del").onclick = async () => {
   if (owner && owner.avatar_path === ph.path && ph.owner_id === S.me.id) await setAvatar(null);
   toast("Photo supprimée"); closeViewer();
 };
+
+function updateBioCount() { $("pf-bio-count").textContent = $("pf-bio").value.length + " / 500"; }
+$("pf-bio").addEventListener("input", updateBioCount);
