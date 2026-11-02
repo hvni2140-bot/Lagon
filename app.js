@@ -59,50 +59,27 @@ async function start() {
   if (session) enter(session); else showAuth();
 }
 
-/* ---------- connexion / inscription ---------- */
-let mode = "login";
-function setMode(m) {
-  mode = m;
-  $("mode-login").setAttribute("aria-selected", m === "login");
-  $("mode-signup").setAttribute("aria-selected", m === "signup");
-  $("name-field").hidden = m !== "signup";
-  $("auth-pass").autocomplete = m === "signup" ? "new-password" : "current-password";
-  $("auth-submit").textContent = m === "signup" ? "Créer mon compte" : "Se connecter";
-  $("auth-err").hidden = true; $("auth-ok").hidden = true;
-}
-$("mode-login").onclick = () => setMode("login");
-$("mode-signup").onclick = () => setMode("signup");
+/* ---------- connexion ---------- */
+// Les comptes sont créés par le gérant. Un identifiant simple ("teva")
+// correspond à une adresse technique interne : aucun email n'est envoyé.
+const LOGIN_DOMAIN = "lagon.example.com";
+const toEmail = (login) => (login.includes("@") ? login : login + "@" + LOGIN_DOMAIN).toLowerCase();
 
 function authError(msg) {
   const m = (msg || "").toLowerCase();
-  if (m.includes("invalid login")) return "Email ou mot de passe incorrect.";
-  if (m.includes("not confirmed")) return "Confirmez d'abord votre adresse email avec le lien reçu.";
-  if (m.includes("already registered")) return "Un compte existe déjà avec cet email. Connectez-vous.";
-  if (m.includes("password")) return "Le mot de passe doit faire au moins 6 caractères.";
+  if (m.includes("invalid login")) return "Identifiant ou mot de passe incorrect.";
   if (m.includes("rate limit")) return "Trop de tentatives. Réessayez dans quelques minutes.";
-  return "Une erreur est survenue : " + msg;
+  return "Connexion impossible : " + msg;
 }
 
 $("auth-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const email = $("auth-email").value.trim(), password = $("auth-pass").value, name = $("auth-name").value.trim();
-  const err = $("auth-err"), ok = $("auth-ok"); err.hidden = true; ok.hidden = true;
-  if (!email || password.length < 6 || (mode === "signup" && !name)) {
-    err.textContent = mode === "signup" ? "Indiquez votre nom, votre email et un mot de passe d'au moins 6 caractères." : "Indiquez votre email et votre mot de passe.";
-    err.hidden = false; return;
-  }
+  const login = $("auth-login").value.trim(), password = $("auth-pass").value;
+  const err = $("auth-err"); err.hidden = true;
+  if (!login || !password) { err.textContent = "Indiquez votre identifiant et votre mot de passe."; err.hidden = false; return; }
   const btn = $("auth-submit"); btn.disabled = true;
-  if (mode === "signup") {
-    const { data, error } = await sb.auth.signUp({
-      email, password,
-      options: { data: { display_name: name }, emailRedirectTo: location.origin + location.pathname },
-    });
-    if (error) { err.textContent = authError(error.message); err.hidden = false; }
-    else if (!data.session) { ok.textContent = "Compte créé. Ouvrez l'email de confirmation, puis revenez vous connecter."; ok.hidden = false; setMode("login"); ok.hidden = false; }
-  } else {
-    const { error } = await sb.auth.signInWithPassword({ email, password });
-    if (error) { err.textContent = authError(error.message); err.hidden = false; }
-  }
+  const { error } = await sb.auth.signInWithPassword({ email: toEmail(login), password });
+  if (error) { err.textContent = authError(error.message); err.hidden = false; }
   btn.disabled = false;
 });
 
@@ -419,18 +396,80 @@ function renderPicker() {
 }
 
 /* ---------- gestion ---------- */
-$("btn-admin").onclick = async () => { await loadProfiles(); renderAdmin(); showView("admin"); };
+// Création des comptes et des mots de passe : passe par la fonction
+// serveur "gerer-membres" (Supabase Edge Function), réservée au gérant.
+function newPassword() {
+  const chars = "abcdefghjkmnpqrstuvwxyz23456789";
+  const a = new Uint32Array(8); crypto.getRandomValues(a);
+  return [...a].map((n) => chars[n % chars.length]).join("");
+}
+
+async function callAdmin(body) {
+  const { data, error } = await sb.functions.invoke("gerer-membres", { body });
+  if (error) {
+    let msg = "Le service de gestion ne répond pas. Vérifiez que la fonction « gerer-membres » est bien installée.";
+    try { const j = await error.context.json(); if (j && j.error) msg = j.error; } catch {}
+    throw new Error(msg);
+  }
+  return data;
+}
+
+function showCreds(name, login, password, title) {
+  const box = $("creds");
+  box.replaceChildren();
+  box.append(el("b", null, title));
+  const txt = `Lagon : https://hvni2140-bot.github.io/Lagon/\nIdentifiant : ${login}\nMot de passe : ${password}`;
+  const pre = el("pre", "creds-text", txt);
+  const copy = el("button", "btn", "Copier pour l'envoyer à " + name); copy.type = "button";
+  copy.onclick = async () => {
+    try { await navigator.clipboard.writeText(txt); toast("Copié"); }
+    catch { const r = document.createRange(); r.selectNodeContents(pre); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); }
+  };
+  box.append(pre, el("span", "muted small", "Notez-le maintenant : le mot de passe ne sera plus affiché ensuite."), copy);
+  box.hidden = false;
+  box.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+$("nm-gen").onclick = () => { $("nm-pass").value = newPassword(); };
+$("new-member").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = $("nm-name").value.trim(), login = $("nm-login").value.trim().toLowerCase(), password = $("nm-pass").value.trim();
+  const err = $("nm-err"); err.hidden = true;
+  if (!name || !/^[a-z0-9._-]{3,30}$/.test(login) || password.length < 6) {
+    err.textContent = "Indiquez un nom, un identifiant de 3 à 30 caractères (lettres sans accent, chiffres, . _ -) et un mot de passe d'au moins 6 caractères.";
+    err.hidden = false; return;
+  }
+  const btn = $("nm-submit"); btn.disabled = true; btn.textContent = "Création…";
+  try {
+    await callAdmin({ action: "create", name, login, password });
+    $("new-member").reset();
+    showCreds(name, login, password, "Compte créé pour " + name);
+    await loadProfiles(); renderAdmin(true);
+  } catch (ex) { err.textContent = ex.message; err.hidden = false; }
+  btn.disabled = false; btn.textContent = "Créer le compte";
+});
+
+$("btn-admin").onclick = async () => { await loadProfiles(); $("creds").hidden = true; renderAdmin(); showView("admin"); };
 function renderAdmin() {
   const list = $("admin-list"); list.replaceChildren();
   for (const p of S.profiles.values()) {
     const row = el("div", "row");
     const who = el("div", "grow");
-    who.append(el("b", null, p.display_name + (p.id === S.me.id ? " (vous)" : "")), document.createElement("br"),
-      el("span", "muted small", "Inscrit le " + new Date(p.created_at).toLocaleDateString("fr-FR")));
+    const sub = p.login ? "Identifiant : " + p.login : "Connexion par email";
+    who.append(el("b", null, p.display_name + (p.id === S.me.id ? " (vous)" : "")), document.createElement("br"), el("span", "muted small", sub));
     row.append(el("div", "av", initial(p.display_name)), who);
     if (p.is_admin) row.append(el("span", "chip admin", "Gérant"));
     if (p.blocked) row.append(el("span", "chip", "Bloqué"));
     if (p.id !== S.me.id) {
+      const pw = el("button", "btn soft", "Nouveau mot de passe"); pw.type = "button";
+      pw.onclick = async () => {
+        if (pw.dataset.armed !== "1") { pw.dataset.armed = "1"; pw.textContent = "Confirmer"; pw.classList.add("danger"); setTimeout(() => { pw.dataset.armed = ""; pw.textContent = "Nouveau mot de passe"; pw.classList.remove("danger"); }, 4000); return; }
+        pw.disabled = true;
+        const password = newPassword();
+        try { await callAdmin({ action: "reset_password", user_id: p.id, password }); showCreds(p.display_name, p.login || "(son email)", password, "Nouveau mot de passe pour " + p.display_name); }
+        catch (ex) { toast(ex.message); }
+        pw.disabled = false; pw.dataset.armed = ""; pw.textContent = "Nouveau mot de passe"; pw.classList.remove("danger");
+      };
       const b = el("button", "btn soft", p.blocked ? "Débloquer" : "Bloquer"); b.type = "button";
       b.onclick = async () => {
         b.disabled = true;
@@ -438,7 +477,7 @@ function renderAdmin() {
         if (error) { toast("Action impossible."); b.disabled = false; return; }
         await loadProfiles(); renderAdmin(); toast(p.blocked ? "Membre débloqué" : "Membre bloqué");
       };
-      row.append(b);
+      row.append(pw, b);
     }
     list.append(row);
   }

@@ -19,17 +19,11 @@
         <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="var(--accent)"/><path d="M4 19c4-3 8 3 12 0s8 3 12 0v6a12 12 0 0 1-24 0z" fill="var(--accent-fg)" opacity=".85"/></svg>
         <h1>Lagon</h1>
       </div>
-      <p class="muted">Discutez et partagez vos photos et vidéos, en groupe ou en privé.</p>
-      <div class="seg" role="tablist">
-        <button id="mode-login" role="tab" aria-selected="true">Connexion</button>
-        <button id="mode-signup" role="tab" aria-selected="false">Créer un compte</button>
-      </div>
+      <p class="muted">Connectez-vous avec l'identifiant et le mot de passe que le gérant vous a donnés.</p>
       <form id="auth-form" novalidate>
-        <label id="name-field" hidden>Votre nom<input id="auth-name" autocomplete="name" maxlength="40"></label>
-        <label>Email<input id="auth-email" type="email" autocomplete="email" required></label>
-        <label>Mot de passe<input id="auth-pass" type="password" autocomplete="current-password" minlength="6" required></label>
+        <label>Identifiant<input id="auth-login" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required></label>
+        <label>Mot de passe<input id="auth-pass" type="password" autocomplete="current-password" required></label>
         <p class="err" id="auth-err" hidden></p>
-        <p class="ok" id="auth-ok" hidden></p>
         <button class="btn" id="auth-submit" type="submit">Se connecter</button>
       </form>
     </div>
@@ -103,8 +97,20 @@
           <div class="chat-title">Gestion</div>
         </header>
         <div class="panel-body">
-          <p class="muted">Vous pouvez supprimer n'importe quel message du groupe et bloquer un membre. Les discussions privées restent confidentielles : même le gérant ne peut pas les lire.</p>
+          <form id="new-member" class="card" novalidate>
+            <b class="card-title">Ajouter un membre</b>
+            <label>Nom affiché<input id="nm-name" maxlength="40" placeholder="Teva"></label>
+            <label>Identifiant de connexion<input id="nm-login" maxlength="30" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="teva"></label>
+            <label>Mot de passe
+              <span class="inline"><input id="nm-pass" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="6 caractères minimum"><button class="btn soft" type="button" id="nm-gen">Générer</button></span>
+            </label>
+            <p class="err" id="nm-err" hidden></p>
+            <button class="btn" id="nm-submit" type="submit">Créer le compte</button>
+          </form>
+          <div id="creds" class="card creds" hidden></div>
+          <b class="card-title">Membres</b>
           <div id="admin-list" class="list"></div>
+          <p class="muted small">Vous pouvez supprimer n'importe quel message du groupe et bloquer un membre. Les discussions privées restent confidentielles : même le gérant ne peut pas les lire.</p>
         </div>
       </section>
     </main>

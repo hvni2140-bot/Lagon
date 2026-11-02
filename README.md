@@ -76,3 +76,17 @@ Ensuite, envoyez simplement l'adresse de l'application à vos membres pour qu'il
 - **Limites gratuites de Supabase** : environ 1 Go de stockage pour les photos et vidéos. Chaque fichier est limité à 50 Mo. Un projet gratuit inactif pendant une semaine est mis en pause ; il suffit de le relancer depuis le tableau de bord.
 - **Modération** : le gérant peut supprimer les messages du groupe et bloquer un membre (il ne peut alors plus rien envoyer, ni dans le groupe ni en privé). Les discussions privées ne sont pas lisibles par le gérant : c'est le principe d'une messagerie privée.
 - **Changer de nom** : un membre ne peut modifier que son nom affiché. Personne ne peut se donner le rôle de gérant depuis l'application.
+
+---
+
+## Comptes créés par le gérant (mise à jour 1)
+
+Les membres ne s'inscrivent plus eux-mêmes : le gérant crée leur compte dans **Gestion** (nom, identifiant, mot de passe) et leur transmet ces informations. Aucun email n'est envoyé.
+
+Installation, une seule fois :
+
+1. **SQL Editor** › New query : coller `supabase-maj-1-comptes.sql`, puis **Run**.
+2. **Edge Functions** › **Deploy a new function** › **Via Editor** : nommer la fonction `gerer-membres`, coller le contenu de `supabase/functions/gerer-membres/index.ts`, puis **Deploy function**.
+3. **Authentication** › **Sign In / Providers** : désactiver **Allow new users to sign up**, puis **Save**. La création de comptes par le gérant continue de fonctionner.
+
+Le gérant se connecte avec son email ; les membres avec leur identifiant.
