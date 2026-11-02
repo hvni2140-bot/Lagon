@@ -128,7 +128,7 @@ function showAuth() {
 
 async function enter(session) {
   if (entering) return; entering = true;
-  const { data: me, error } = await sb.from("profiles").select("*").eq("id", session.user.id).single();
+  const { data: me, error } = await fetchMe(session.user.id);
   if (error || !me) { entering = false; toast("Profil introuvable. Reconnectez-vous."); await sb.auth.signOut(); return; }
   S.me = me;
   if (!me.terms_accepted_at) { showTerms(); return; }
@@ -146,10 +146,22 @@ async function enter(session) {
 $("btn-logout").onclick = () => sb.auth.signOut();
 
 /* ---------- chargement ---------- */
+// Les membres ne voient que le nom, la photo et le rôle des autres.
+// Leur propre fiche complète et celle de tous (pour le gérant) passent par des fonctions dédiées.
+const PUBLIC_COLS = "id,display_name,avatar_path,is_admin,created_at";
+async function fetchMe(id) {
+  const r = await sb.rpc("my_profile").single();
+  if (!r.error) return r;
+  return sb.from("profiles").select("*").eq("id", id).single(); // avant la mise à jour de la base
+}
 async function loadProfiles() {
-  const { data } = await sb.from("profiles").select("*").order("display_name");
-  S.profiles = new Map((data || []).map((p) => [p.id, p]));
-  if (S.me && S.profiles.has(S.me.id)) S.me = S.profiles.get(S.me.id);
+  let res = S.me && S.me.is_admin ? await sb.rpc("admin_profiles") : { error: true };
+  if (res.error) res = await sb.from("profiles").select(S.me && S.me.is_admin ? "*" : PUBLIC_COLS).order("display_name");
+  S.profiles = new Map((res.data || []).map((p) => [p.id, p]));
+  if (S.me) {
+    const { data: me } = await fetchMe(S.me.id);
+    if (me) { S.me = me; S.profiles.set(me.id, { ...S.profiles.get(me.id), ...me }); }
+  }
 }
 
 async function loadConvs() {
