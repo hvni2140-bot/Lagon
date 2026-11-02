@@ -1,6 +1,6 @@
-# Lagon — messagerie de groupe et privée
+# Sunset — messagerie de groupe et privée
 
-Lagon permet à vos membres de discuter et de partager photos et vidéos :
+Sunset (anciennement Lagon) permet à vos membres de discuter et de partager photos et vidéos :
 
 - **Groupe** : une discussion ouverte à tous les membres.
 - **Discussions privées** : entre deux personnes. Elles sont protégées par la base de données : personne d'autre ne peut les lire, pas même le gérant.

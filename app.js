@@ -1,4 +1,4 @@
-// Lagon — messagerie de groupe et privée avec photos et vidéos.
+// Sunset — messagerie de groupe et privée avec photos et vidéos.
 // Les données sont dans Supabase ; les règles d'accès de la base
 // (voir supabase.sql) protègent les discussions privées.
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm";
@@ -248,7 +248,7 @@ function renderConvs() {
     b.onclick = () => openConv(c.id);
     list.append(b);
   }
-  const n = S.unread.size; document.title = n ? `(${n}) Lagon` : "Lagon";
+  const n = S.unread.size; document.title = n ? `(${n}) Sunset` : "Sunset";
 }
 
 /* ---------- navigation ---------- */
@@ -489,7 +489,7 @@ function showCreds(name, login, password, title) {
   const box = $("creds");
   box.replaceChildren();
   box.append(el("b", null, title));
-  const txt = `Lagon : https://hvni2140-bot.github.io/Lagon/\nIdentifiant : ${login}\nMot de passe : ${password}`;
+  const txt = `Sunset : https://hvni2140-bot.github.io/Lagon/\nIdentifiant : ${login}\nMot de passe : ${password}`;
   const pre = el("pre", "creds-text", txt);
   const copy = el("button", "btn", "Copier pour l'envoyer à " + name); copy.type = "button";
   copy.onclick = async () => {

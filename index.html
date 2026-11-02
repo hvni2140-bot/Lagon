@@ -3,8 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0B7C80">
-  <title>Lagon</title>
+  <meta name="theme-color" content="#000000">
+  <title>Sunset</title>
+  <meta name="apple-mobile-web-app-title" content="Sunset">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="favicon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="style.css">
@@ -15,10 +19,7 @@
   <!-- Écran de connexion -->
   <section id="auth" class="auth" hidden>
     <div class="auth-card">
-      <div class="logo-row">
-        <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="var(--accent)"/><path d="M4 19c4-3 8 3 12 0s8 3 12 0v6a12 12 0 0 1-24 0z" fill="var(--accent-fg)" opacity=".85"/></svg>
-        <h1>Lagon</h1>
-      </div>
+      <img class="logo-banner" src="logo.jpg" alt="Sunset" width="1000" height="470">
       <p class="muted">Connectez-vous avec l'identifiant et le mot de passe que le gérant vous a donnés.</p>
       <form id="auth-form" novalidate>
         <label>Identifiant<input id="auth-login" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required></label>
@@ -32,11 +33,12 @@
   <!-- Conditions d'utilisation (première connexion) -->
   <section id="terms" class="auth" hidden>
     <div class="auth-card terms-card">
-      <h1>Bienvenue sur Lagon</h1>
+      <img class="logo-banner" src="logo.jpg" alt="Sunset" width="1000" height="470">
+      <h1>Bienvenue sur Sunset</h1>
       <p class="muted">Avant de commencer, lisez et acceptez les conditions d'utilisation.</p>
       <div class="terms-text">
-        <p><b>1. Votre compte.</b> Votre compte est personnel. Il a été créé par le gérant de Lagon. Ne partagez pas votre mot de passe.</p>
-        <p><b>2. Modération par le gérant.</b> Pour assurer la sécurité et le bon usage de Lagon, le gérant peut consulter toutes les discussions, y compris les discussions privées, ainsi que toutes les photos et vidéos échangées.</p>
+        <p><b>1. Votre compte.</b> Votre compte est personnel. Il a été créé par le gérant de Sunset. Ne partagez pas votre mot de passe.</p>
+        <p><b>2. Modération par le gérant.</b> Pour assurer la sécurité et le bon usage de Sunset, le gérant peut consulter toutes les discussions, y compris les discussions privées, ainsi que toutes les photos et vidéos échangées.</p>
         <p><b>3. Suppression et blocage.</b> Le gérant peut supprimer un message, une photo ou une vidéo, et bloquer un compte en cas d'abus.</p>
         <p><b>4. Règles de respect.</b> Sont interdits : les contenus illégaux, violents ou choquants, le harcèlement et les insultes, ainsi que la diffusion de photos ou vidéos d'une personne sans son accord.</p>
         <p><b>5. Vos données.</b> Vos messages, photos et vidéos sont conservés sur les serveurs de l'application (Supabase). Vous pouvez demander au gérant la suppression de votre compte et de vos données.</p>
@@ -55,7 +57,7 @@
         <button class="me-btn" id="btn-me" type="button" aria-label="Mon profil">
           <div class="av" id="me-av"></div>
           <div class="grow">
-            <h1 class="brand">Lagon</h1>
+            <h1 class="brand"><img class="logo-mini" src="logo.jpg" alt="Sunset" width="1000" height="470"></h1>
             <div class="muted small" id="me-name"></div>
           </div>
         </button>

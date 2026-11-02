@@ -178,3 +178,8 @@ label.check input { width: 22px; height: 22px; padding: 0; accent-color: var(--a
 .pair { display: flex; }
 .pair .av.mini2 { width: 30px; height: 30px; font-size: 13px; border: 2px solid var(--surface); }
 .pair .av.mini2 + .av.mini2 { margin-left: -10px; }
+
+/* ---- Logo Sunset ---- */
+.logo-banner { display: block; width: 100%; height: auto; border-radius: 12px; background: #000; }
+.brand { line-height: 0; }
+.logo-mini { height: 30px; width: auto; border-radius: 6px; background: #000; display: block; }
