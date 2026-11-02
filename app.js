@@ -688,12 +688,18 @@ function renderRequests() {
 function updateAdminBadge() {
   if (!S.me || !S.me.is_admin) return;
   const n = [...S.profiles.values()].filter((p) => p.status === "pending").length;
-  $("btn-admin").textContent = n ? `Gestion (${n})` : "Gestion";
-  $("btn-admin").classList.toggle("alert", n > 0);
+  // Petit point rouge sur « Gestion » et sur l'onglet « Membres » quand des demandes attendent
+  const btn = $("btn-admin");
+  btn.replaceChildren(document.createTextNode("Gestion"));
+  if (n) { const d = el("span", "red-dot"); btn.append(d); }
+  btn.setAttribute("aria-label", n ? `Gestion, ${n} demande${n > 1 ? "s" : ""} de compte en attente` : "Gestion");
+  const tab = $("adm-tab-members");
+  tab.replaceChildren(document.createTextNode("Membres"));
+  if (n) tab.append(el("span", "red-dot"));
 }
 
 function renderAdmin() {
-  renderRequests();
+  renderRequests(); updateAdminBadge();
   const list = $("admin-list"); list.replaceChildren();
   for (const p of S.profiles.values()) {
     if (p.status === "pending") continue;

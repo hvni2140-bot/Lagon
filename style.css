@@ -238,3 +238,7 @@ label.check input { width: 22px; height: 22px; padding: 0; accent-color: var(--a
 
 /* ---- Message de bienvenue ---- */
 .welcome { margin: 0; padding: 10px 14px; border-radius: 10px; background: var(--soft); color: var(--fg); font-weight: 600; }
+
+/* ---- Point rouge : demandes de compte en attente ---- */
+#btn-admin, #adm-tab-members { position: relative; }
+.red-dot { position: absolute; top: 2px; right: 2px; width: 10px; height: 10px; border-radius: 50%; background: #E0245E; border: 2px solid var(--surface); }
