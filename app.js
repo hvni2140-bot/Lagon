@@ -145,18 +145,34 @@ function showPending(status) {
   $("pending-title").textContent = refused ? "Demande refusée" : "Demande envoyée";
   $("pending-text").textContent = refused
     ? "Le gérant n'a pas validé votre demande de compte. Contactez-le si vous pensez qu'il s'agit d'une erreur."
-    : "Le gérant doit valider votre compte avant que vous puissiez accéder à Sunset. Revenez un peu plus tard.";
+    : "Le gérant doit valider votre compte avant que vous puissiez accéder à Sunset. Vous pouvez laisser cette page ouverte : elle s'ouvrira toute seule dès que votre compte sera validé.";
   $("pending-check").hidden = refused;
+  // Vérifie tout seul toutes les 30 secondes si le gérant a accepté
+  clearInterval(pendingTimer);
+  if (!refused) pendingTimer = setInterval(checkApproval, 30000);
+}
+let pendingTimer = null;
+async function checkApproval() {
+  if ($("pending").hidden) { clearInterval(pendingTimer); return; }
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) return;
+  const { data: me } = await fetchMe(session.user.id);
+  if (!me || me.status === "pending") return;
+  clearInterval(pendingTimer);
+  $("pending").hidden = true; S.me = null; entering = false;
+  enter(session);
 }
 $("pending-logout").onclick = () => { $("pending").hidden = true; sb.auth.signOut(); };
 $("pending-check").onclick = async () => {
-  const { data: { session } } = await sb.auth.getSession();
-  $("pending").hidden = true; S.me = null; entering = false;
-  if (session) enter(session); else showAuth();
+  const btn = $("pending-check"); btn.disabled = true; btn.textContent = "Vérification…";
+  await checkApproval();
+  btn.disabled = false; btn.textContent = "Vérifier si mon compte est validé";
+  if (!$("pending").hidden) toast("Pas encore validé. Cette page se mettra à jour toute seule.");
 };
 
 function showTerms() {
-  $("auth").hidden = true; $("app").hidden = true; $("terms").hidden = false;
+  $("auth").hidden = true; $("app").hidden = true; $("pending").hidden = true; $("terms").hidden = false;
+  $("welcome").hidden = !!(S.me && S.me.is_admin);
   $("terms-check").checked = false; $("terms-accept").disabled = true;
 }
 $("terms-check").addEventListener("change", () => { $("terms-accept").disabled = !$("terms-check").checked; });
@@ -167,7 +183,7 @@ $("terms-accept").onclick = async () => {
   if (error) { err.textContent = "L'acceptation n'a pas pu être enregistrée. Réessayez."; err.hidden = false; btn.disabled = false; return; }
   $("terms").hidden = true;
   const { data: { session } } = await sb.auth.getSession();
-  S.me = null; entering = false; if (session) enter(session);
+  S.me = null; entering = false; if (session) { await enter(session); toast("Bienvenue sur Sunset !"); }
 };
 
 function showAuth() {

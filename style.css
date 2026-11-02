@@ -233,3 +233,6 @@ label.check input { width: 22px; height: 22px; padding: 0; accent-color: var(--a
 .req-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding-top: 10px; border-top: 1px solid var(--line); }
 .req-row:first-of-type { border-top: 0; }
 .pill.alert { background: var(--accent); color: var(--accent-fg); }
+
+/* ---- Message de bienvenue ---- */
+.welcome { margin: 0; padding: 10px 14px; border-radius: 10px; background: var(--soft); color: var(--fg); font-weight: 600; }
