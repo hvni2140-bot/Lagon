@@ -54,7 +54,9 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-w
 input { border: 1px solid var(--line); border-radius: 10px; background: var(--bg); padding: 10px 12px; font-size: 16px; color: var(--fg); }
 
 /* ---- Structure ---- */
-.app { height: 100%; display: grid; grid-template-columns: 320px 1fr; }
+.app { height: 100%; display: grid; grid-template-columns: 320px minmax(0, 1fr); }
+.side { min-width: 0; }
+.side-head > .pill { flex: none; }
 .side { background: var(--surface); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
 .side-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
 .brand { font-size: 22px; }
@@ -126,7 +128,7 @@ button.row:hover { background: var(--bg); }
 
 /* ---- Téléphone : une colonne à la fois ---- */
 @media (max-width: 760px) {
-  .app { grid-template-columns: 1fr; }
+  .app { grid-template-columns: minmax(0, 1fr); }
   .app .pane { display: none; }
   .app.in-chat .side { display: none; }
   .app.in-chat .pane { display: flex; }
