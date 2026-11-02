@@ -227,3 +227,9 @@ label.check input { width: 22px; height: 22px; padding: 0; accent-color: var(--a
 .bio-input { width: 100%; resize: vertical; min-height: 96px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); padding: 10px 12px; font-size: 16px; line-height: 1.45; color: var(--fg); }
 .counter { align-self: flex-end; font-weight: 400; font-variant-numeric: tabular-nums; }
 .bio { margin: 0; max-width: 46ch; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
+
+/* ---- Demandes de compte ---- */
+.requests { border-color: var(--accent); }
+.req-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding-top: 10px; border-top: 1px solid var(--line); }
+.req-row:first-of-type { border-top: 0; }
+.pill.alert { background: var(--accent); color: var(--accent-fg); }

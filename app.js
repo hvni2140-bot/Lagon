@@ -93,16 +93,67 @@ function authError(msg) {
   return "Connexion impossible : " + msg;
 }
 
+let authMode = "login";
+function setAuthMode(m) {
+  authMode = m;
+  const su = m === "signup";
+  $("mode-login").setAttribute("aria-selected", !su); $("mode-signup").setAttribute("aria-selected", su);
+  $("su-name-field").hidden = !su; $("su-pass2-field").hidden = !su; $("su-login-help").hidden = !su;
+  $("auth-pass").autocomplete = su ? "new-password" : "current-password";
+  $("auth-intro").textContent = su
+    ? "Choisissez votre nom, un identifiant et un mot de passe. Le gérant validera votre demande."
+    : "Connectez-vous avec votre identifiant et votre mot de passe.";
+  $("auth-submit").textContent = su ? "Envoyer ma demande" : "Se connecter";
+  $("auth-err").hidden = true;
+}
+$("mode-login").onclick = () => setAuthMode("login");
+$("mode-signup").onclick = () => setAuthMode("signup");
+
 $("auth-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const login = $("auth-login").value.trim(), password = $("auth-pass").value;
+  const login = $("auth-login").value.trim().toLowerCase(), password = $("auth-pass").value;
   const err = $("auth-err"); err.hidden = true;
-  if (!login || !password) { err.textContent = "Indiquez votre identifiant et votre mot de passe."; err.hidden = false; return; }
+  const fail = (t) => { err.textContent = t; err.hidden = false; };
+  if (authMode === "signup") {
+    const name = $("su-name").value.trim();
+    if (!name) return fail("Indiquez votre nom.");
+    if (!/^[a-z0-9._-]{3,30}$/.test(login)) return fail("Identifiant invalide : 3 à 30 caractères, lettres sans accent, chiffres, . _ -");
+    if (password.length < 6) return fail("Le mot de passe doit faire au moins 6 caractères.");
+    if (password !== $("su-pass2").value) return fail("Les deux mots de passe ne sont pas identiques.");
+  } else if (!login || !password) return fail("Indiquez votre identifiant et votre mot de passe.");
   const btn = $("auth-submit"); btn.disabled = true;
-  const { error } = await sb.auth.signInWithPassword({ email: toEmail(login), password });
-  if (error) { err.textContent = authError(error.message); err.hidden = false; }
+  if (authMode === "signup") {
+    const { data, error } = await sb.auth.signUp({ email: toEmail(login), password, options: { data: { display_name: $("su-name").value.trim() } } });
+    if (error) {
+      const m = (error.message || "").toLowerCase();
+      fail(m.includes("already") ? "Cet identifiant est déjà utilisé. Choisissez-en un autre."
+        : m.includes("not allowed") || m.includes("disabled") ? "Les demandes de compte sont fermées pour le moment. Contactez le gérant."
+        : authError(error.message));
+    } else if (!data.session) {
+      fail("Votre demande n'a pas pu être finalisée. Contactez le gérant.");
+    }
+  } else {
+    const { error } = await sb.auth.signInWithPassword({ email: toEmail(login), password });
+    if (error) fail(authError(error.message));
+  }
   btn.disabled = false;
 });
+
+function showPending(status) {
+  $("auth").hidden = true; $("app").hidden = true; $("terms").hidden = true; $("pending").hidden = false;
+  const refused = status === "rejected";
+  $("pending-title").textContent = refused ? "Demande refusée" : "Demande envoyée";
+  $("pending-text").textContent = refused
+    ? "Le gérant n'a pas validé votre demande de compte. Contactez-le si vous pensez qu'il s'agit d'une erreur."
+    : "Le gérant doit valider votre compte avant que vous puissiez accéder à Sunset. Revenez un peu plus tard.";
+  $("pending-check").hidden = refused;
+}
+$("pending-logout").onclick = () => { $("pending").hidden = true; sb.auth.signOut(); };
+$("pending-check").onclick = async () => {
+  const { data: { session } } = await sb.auth.getSession();
+  $("pending").hidden = true; S.me = null; entering = false;
+  if (session) enter(session); else showAuth();
+};
 
 function showTerms() {
   $("auth").hidden = true; $("app").hidden = true; $("terms").hidden = false;
@@ -120,7 +171,7 @@ $("terms-accept").onclick = async () => {
 };
 
 function showAuth() {
-  $("terms").hidden = true;
+  $("terms").hidden = true; $("pending").hidden = true;
   S.me = null; entering = false;
   if (channel) { sb.removeChannel(channel); channel = null; }
   $("app").hidden = true; $("auth").hidden = false;
@@ -131,6 +182,7 @@ async function enter(session) {
   const { data: me, error } = await fetchMe(session.user.id);
   if (error || !me) { entering = false; toast("Profil introuvable. Reconnectez-vous."); await sb.auth.signOut(); return; }
   S.me = me;
+  if (me.status === "pending" || me.status === "rejected") { entering = false; showPending(me.status); return; }
   if (!me.terms_accepted_at) { showTerms(); return; }
   await loadProfiles();
   await loadConvs();
@@ -138,6 +190,7 @@ async function enter(session) {
   $("auth").hidden = true; $("app").hidden = false;
   renderMe();
   $("btn-admin").hidden = !me.is_admin;
+  updateAdminBadge();
   const group = S.convs.find((c) => c.is_group);
   if (group && matchMedia("(min-width: 761px)").matches) openConv(group.id);
   else showList();
@@ -467,7 +520,7 @@ $("picker-search").addEventListener("input", renderPicker);
 function renderPicker() {
   const q = $("picker-search").value.trim().toLowerCase();
   const list = $("picker-list"); list.replaceChildren();
-  const people = [...S.profiles.values()].filter((p) => p.id !== S.me.id && p.display_name.toLowerCase().includes(q));
+  const people = [...S.profiles.values()].filter((p) => p.id !== S.me.id && (!p.status || p.status === "approved") && p.display_name.toLowerCase().includes(q));
   if (!people.length) { list.append(el("div", "row muted", q ? "Aucun membre ne correspond." : "Aucun autre membre pour l'instant. Invitez des personnes à créer un compte.")); return; }
   for (const p of people) {
     const b = el("button", "row"); b.type = "button";
@@ -529,6 +582,7 @@ $("new-member").addEventListener("submit", async (e) => {
   const btn = $("nm-submit"); btn.disabled = true; btn.textContent = "Création…";
   try {
     await callAdmin({ action: "create", name, login, password });
+    await sb.rpc("approve_login", { l: login }); // compte créé par le gérant : accepté d'office
     $("new-member").reset();
     showCreds(name, login, password, "Compte créé pour " + name);
     await loadProfiles(); renderAdmin(true);
@@ -590,9 +644,43 @@ async function renderAllConvs() {
     list.append(b);
   }
 }
+function renderRequests() {
+  const box = $("requests"), waiting = [...S.profiles.values()].filter((p) => p.status === "pending");
+  box.replaceChildren(); box.hidden = !waiting.length;
+  if (!waiting.length) return;
+  box.append(el("b", "card-title", waiting.length > 1 ? waiting.length + " demandes de compte" : "1 demande de compte"));
+  for (const p of waiting) {
+    const row = el("div", "req-row");
+    const who = el("div", "grow");
+    who.append(el("b", null, p.display_name), document.createElement("br"),
+      el("span", "muted small", "Identifiant : " + (p.login || "?") + " · " + shortWhen(p.created_at)));
+    const ok = el("button", "btn", "Accepter"); ok.type = "button";
+    const no = el("button", "btn soft", "Refuser"); no.type = "button";
+    const act = async (value, b) => {
+      b.disabled = true;
+      const { error } = await sb.rpc("set_member_status", { target: p.id, value });
+      if (error) { toast("Action impossible."); b.disabled = false; return; }
+      toast(value === "approved" ? p.display_name + " a été accepté" : "Demande refusée");
+      await loadProfiles(); renderAdmin(); updateAdminBadge();
+    };
+    ok.onclick = () => act("approved", ok);
+    no.onclick = () => { if (no.dataset.armed !== "1") { no.dataset.armed = "1"; no.textContent = "Confirmer le refus"; no.classList.add("danger"); return; } act("rejected", no); };
+    row.append(avatar(p.id), who, ok, no);
+    box.append(row);
+  }
+}
+function updateAdminBadge() {
+  if (!S.me || !S.me.is_admin) return;
+  const n = [...S.profiles.values()].filter((p) => p.status === "pending").length;
+  $("btn-admin").textContent = n ? `Gestion (${n})` : "Gestion";
+  $("btn-admin").classList.toggle("alert", n > 0);
+}
+
 function renderAdmin() {
+  renderRequests();
   const list = $("admin-list"); list.replaceChildren();
   for (const p of S.profiles.values()) {
+    if (p.status === "pending") continue;
     const row = el("div", "row");
     const who = el("div", "grow");
     const sub = p.login ? "Identifiant : " + p.login : "Connexion par email";
@@ -601,6 +689,12 @@ function renderAdmin() {
     row.append(avb, who);
     if (p.is_admin) row.append(el("span", "chip admin", "Gérant"));
     if (p.blocked) row.append(el("span", "chip", "Bloqué"));
+    if (p.status === "rejected") {
+      row.append(el("span", "chip", "Refusé"));
+      const ok = el("button", "btn soft", "Accepter finalement"); ok.type = "button";
+      ok.onclick = async () => { ok.disabled = true; const { error } = await sb.rpc("set_member_status", { target: p.id, value: "approved" }); if (error) { toast("Action impossible."); ok.disabled = false; return; } await loadProfiles(); renderAdmin(); };
+      row.append(ok); list.append(row); continue;
+    }
     if (p.id !== S.me.id) {
       const pw = el("button", "btn soft", "Nouveau mot de passe"); pw.type = "button";
       pw.onclick = async () => {
@@ -897,3 +991,21 @@ $("vw-del").onclick = async () => {
 
 function updateBioCount() { $("pf-bio-count").textContent = $("pf-bio").value.length + " / 500"; }
 $("pf-bio").addEventListener("input", updateBioCount);
+
+/* ---------- changer son mot de passe ---------- */
+$("pw-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const a = $("pw-new").value, b = $("pw-new2").value, err = $("pw-err"); err.hidden = true;
+  if (a.length < 6) { err.textContent = "Le mot de passe doit faire au moins 6 caractères."; err.hidden = false; return; }
+  if (a !== b) { err.textContent = "Les deux mots de passe ne sont pas identiques."; err.hidden = false; return; }
+  const { error } = await sb.auth.updateUser({ password: a });
+  if (error) { err.textContent = /different|same/i.test(error.message) ? "Choisissez un mot de passe différent de l'actuel." : "Le mot de passe n'a pas pu être changé."; err.hidden = false; return; }
+  $("pw-form").reset(); toast("Mot de passe changé");
+});
+
+// Le gérant voit arriver les nouvelles demandes sans recharger la page
+setInterval(async () => {
+  if (!S.me || !S.me.is_admin || document.hidden) return;
+  await loadProfiles(); updateAdminBadge();
+  if (S.view === "admin" && !$("adm-members").hidden) renderRequests();
+}, 60000);

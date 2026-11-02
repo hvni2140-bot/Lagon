@@ -20,13 +20,31 @@
   <section id="auth" class="auth" hidden>
     <div class="auth-card">
       <img class="logo-banner" src="logo.jpg" alt="Sunset" width="1000" height="470">
-      <p class="muted">Connectez-vous avec l'identifiant et le mot de passe que le gérant vous a donnés.</p>
+      <div class="seg" role="tablist">
+        <button id="mode-login" type="button" role="tab" aria-selected="true">Se connecter</button>
+        <button id="mode-signup" type="button" role="tab" aria-selected="false">Demander un compte</button>
+      </div>
+      <p class="muted" id="auth-intro">Connectez-vous avec votre identifiant et votre mot de passe.</p>
       <form id="auth-form" novalidate>
+        <label id="su-name-field" hidden>Votre nom (visible par les membres)<input id="su-name" maxlength="40" autocomplete="name"></label>
         <label>Identifiant<input id="auth-login" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required></label>
+        <span class="muted small" id="su-login-help" hidden>3 à 30 caractères : lettres sans accent, chiffres, . _ -</span>
         <label>Mot de passe<input id="auth-pass" type="password" autocomplete="current-password" required></label>
+        <label id="su-pass2-field" hidden>Confirmez le mot de passe<input id="su-pass2" type="password" autocomplete="new-password"></label>
         <p class="err" id="auth-err" hidden></p>
         <button class="btn" id="auth-submit" type="submit">Se connecter</button>
       </form>
+    </div>
+  </section>
+
+  <!-- Compte en attente de validation -->
+  <section id="pending" class="auth" hidden>
+    <div class="auth-card">
+      <img class="logo-banner" src="logo.jpg" alt="Sunset" width="1000" height="470">
+      <h1 id="pending-title">Demande envoyée</h1>
+      <p class="muted" id="pending-text">Le gérant doit valider votre compte avant que vous puissiez accéder à Sunset. Revenez un peu plus tard.</p>
+      <button class="btn" id="pending-check" type="button">Vérifier si mon compte est validé</button>
+      <button class="pill ghost" id="pending-logout" type="button">Se déconnecter</button>
     </div>
   </section>
 
@@ -143,6 +161,13 @@
             <p class="err" id="pf-err" hidden></p>
             <button class="btn" type="submit">Enregistrer</button>
           </form>
+          <form id="pw-form" class="card" novalidate>
+            <b class="card-title">Changer mon mot de passe</b>
+            <label>Nouveau mot de passe<input id="pw-new" type="password" autocomplete="new-password" minlength="6"></label>
+            <label>Confirmez le nouveau mot de passe<input id="pw-new2" type="password" autocomplete="new-password"></label>
+            <p class="err" id="pw-err" hidden></p>
+            <button class="btn soft" type="submit">Changer le mot de passe</button>
+          </form>
         </div>
       </section>
 
@@ -196,6 +221,7 @@
             <p class="err" id="nm-err" hidden></p>
             <button class="btn" id="nm-submit" type="submit">Créer le compte</button>
           </form>
+          <div id="requests" class="card requests" hidden></div>
           <div id="creds" class="card creds" hidden></div>
           <b class="card-title">Membres</b>
           <div id="admin-list" class="list"></div>
