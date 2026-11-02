@@ -242,3 +242,12 @@ label.check input { width: 22px; height: 22px; padding: 0; accent-color: var(--a
 /* ---- Point rouge : demandes de compte en attente ---- */
 #btn-admin, #adm-tab-members, #btn-back { position: relative; }
 .red-dot { position: absolute; top: 2px; right: 2px; width: 10px; height: 10px; border-radius: 50%; background: #E0245E; border: 2px solid var(--surface); }
+
+/* ---- Plusieurs photos à la fois ---- */
+.attach { flex-wrap: wrap; }
+.attach-strip { display: flex; gap: 6px; overflow-x: auto; flex: 1 1 100%; padding-bottom: 2px; }
+.attach-item { position: relative; flex: none; }
+.attach .attach-item img, .attach .attach-item video { width: 64px; height: 64px; }
+.attach .attach-x { position: absolute; top: 2px; right: 2px; width: 22px; height: 22px; padding: 0; border-radius: 50%; background: rgba(0,0,0,.65); color: #fff; font-size: 15px; line-height: 22px; text-align: center; }
+.attach-badge { position: absolute; left: 4px; bottom: 4px; color: #fff; font-size: 10px; background: rgba(0,0,0,.6); border-radius: 99px; padding: 1px 5px; }
+.attach .attach-label { flex: 1; }

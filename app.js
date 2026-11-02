@@ -21,7 +21,7 @@ const S = {
 };
 const nodes = new Map();
 const urlCache = new Map();
-let pending = null, stickBottom = true, confirmTimer = null, toastTimer = null, entering = false, channel = null;
+let pending = [], stickBottom = true, confirmTimer = null, toastTimer = null, entering = false, channel = null;
 
 /* ---------- utilitaires ---------- */
 function toast(t) { const e = $("toast"); e.textContent = t; e.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => (e.hidden = true), 2600); }
@@ -483,26 +483,52 @@ async function deleteMsg(m) {
 
 /* ---------- envoi ---------- */
 const text = $("text");
-function updateSend() { $("send").disabled = !(text.value.trim() || pending); }
+const MAX_FILES = 10; // photos ou vidéos envoyées en une fois
+function updateSend() { $("send").disabled = !(text.value.trim() || pending.length); }
 function grow() { text.style.height = "auto"; text.style.height = Math.min(text.scrollHeight, 120) + "px"; }
 text.addEventListener("input", () => { grow(); updateSend(); });
 text.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing && matchMedia("(hover: hover)").matches) { e.preventDefault(); if (!$("send").disabled) send(); }
 });
 function showErr(t) { $("cerr").textContent = t; $("cerr").hidden = !t; }
-function clearAttach() { pending = null; $("file").value = ""; $("attach").hidden = true; $("attach").replaceChildren(); updateSend(); }
+function clearAttach() { pending = []; $("file").value = ""; renderAttach(); updateSend(); }
+
+// Aperçu des fichiers choisis : une vignette par fichier, chacune avec sa croix
+function renderAttach(status) {
+  const box = $("attach"); box.replaceChildren(); box.hidden = !pending.length;
+  if (!pending.length) return;
+  const strip = el("div", "attach-strip");
+  pending.forEach((f, i) => {
+    const cell = el("div", "attach-item");
+    if (!f._url) f._url = URL.createObjectURL(f);
+    const prev = f.type.startsWith("video/") ? Object.assign(document.createElement("video"), { src: f._url, muted: true, playsInline: true }) : Object.assign(document.createElement("img"), { src: f._url, alt: "Aperçu" });
+    const x = el("button", "attach-x", "×"); x.type = "button"; x.setAttribute("aria-label", "Retirer ce fichier");
+    x.onclick = () => { URL.revokeObjectURL(f._url); pending.splice(i, 1); renderAttach(); updateSend(); };
+    cell.append(prev, x);
+    if (f.type.startsWith("video/")) cell.append(el("span", "attach-badge", "▶"));
+    strip.append(cell);
+  });
+  const n = pending.length, photos = pending.filter((f) => !f.type.startsWith("video/")).length;
+  const videos = n - photos;
+  const parts = [photos && (photos > 1 ? photos + " photos" : "1 photo"), videos && (videos > 1 ? videos + " vidéos" : "1 vidéo")].filter(Boolean);
+  const label = status || parts.join(" et ") + (n > 1 ? " · le texte part avec la première" : "");
+  const lbl = el("span", "attach-label", label);
+  const all = el("button", null, "Tout retirer"); all.type = "button"; all.onclick = clearAttach;
+  box.append(strip, lbl, all);
+}
 
 $("file").addEventListener("change", () => {
-  const f = $("file").files[0]; showErr(""); if (!f) return;
-  if (!/^(image|video)\//.test(f.type)) { showErr("Choisissez une photo ou une vidéo."); $("file").value = ""; return; }
-  const isPhoto = f.type.startsWith("image/") && f.type !== "image/gif";
-  if (!isPhoto && f.size > MAX_FILE) { showErr("Ce fichier fait " + fmtBytes(f.size) + ". La limite est de 50 Mo : raccourcissez la vidéo."); $("file").value = ""; return; }
-  pending = f;
-  const url = URL.createObjectURL(f);
-  const prev = f.type.startsWith("video/") ? Object.assign(document.createElement("video"), { src: url, muted: true, playsInline: true }) : Object.assign(document.createElement("img"), { src: url, alt: "Aperçu" });
-  const lbl = el("span", null, (f.type.startsWith("video/") ? "Vidéo" : "Photo") + " · " + fmtBytes(f.size));
-  const x = el("button", null, "Retirer"); x.type = "button"; x.onclick = clearAttach;
-  $("attach").replaceChildren(prev, lbl, x); $("attach").hidden = false; updateSend(); text.focus();
+  const files = [...$("file").files]; $("file").value = ""; showErr("");
+  const errs = [];
+  for (const f of files) {
+    if (pending.length >= MAX_FILES) { errs.push(`${MAX_FILES} fichiers maximum par envoi.`); break; }
+    if (!/^(image|video)\//.test(f.type)) { errs.push("Seules les photos et les vidéos sont acceptées."); continue; }
+    const isPhoto = f.type.startsWith("image/") && f.type !== "image/gif";
+    if (!isPhoto && f.size > MAX_FILE) { errs.push("Une vidéo de " + fmtBytes(f.size) + " a été ignorée : la limite est de 50 Mo."); continue; }
+    pending.push(f);
+  }
+  if (errs.length) showErr([...new Set(errs)].join(" "));
+  renderAttach(); updateSend(); text.focus();
 });
 
 // Réduit une photo à 1600 pixels maximum (côté le plus long), en JPEG qualité 80 %.
@@ -522,34 +548,46 @@ function compressPhoto(file) {
   });
 }
 
+async function uploadOne(cid, f) {
+  // Les photos sont compressées avant l'envoi (≈ 10 fois plus légères)
+  let file = f, type = f.type;
+  if (f.type.startsWith("image/") && f.type !== "image/gif") {
+    try { const small = await compressPhoto(f); if (small.size < f.size) { file = small; type = "image/jpeg"; } } catch {}
+  }
+  if (file.size > MAX_FILE) throw new Error("Fichier trop lourd (50 Mo maximum).");
+  const ext = type === "image/jpeg" && file !== f ? "jpg" : ((f.name.split(".").pop() || "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 5) || (f.type.split("/")[1] || "bin"));
+  const path = `${cid}/${crypto.randomUUID()}.${ext}`;
+  const { error } = await sb.storage.from("media").upload(path, file, { contentType: type, upsert: false });
+  if (error) throw new Error(/size|large/i.test(error.message) ? "Fichier trop lourd (50 Mo maximum)." : "L'envoi du fichier a échoué. Réessayez.");
+  return { media_path: path, media_kind: f.type.startsWith("video/") ? "video" : "image" };
+}
+
+async function insertMessage(cid, row) {
+  const { data, error } = await sb.from("messages").insert({ conversation_id: cid, ...row }).select().single();
+  if (error) throw new Error(S.me.blocked ? "Votre compte est bloqué." : "Le message n'a pas pu être envoyé. Réessayez.");
+  addMessage(data); renderConvs(); if (S.current === cid) renderThread();
+}
+
+// Chaque photo ou vidéo part dans son propre message ; le texte accompagne la première.
 async function send() {
-  const cid = S.current, body = text.value.trim().slice(0, 2000), f = pending;
-  if (!cid || (!body && !f)) return;
-  $("send").disabled = true; showErr("");
+  const cid = S.current; let body = text.value.trim().slice(0, 2000);
+  if (!cid || (!body && !pending.length)) return;
+  $("send").disabled = true; showErr(""); stickBottom = true;
   try {
-    const row = { conversation_id: cid };
-    if (body) row.body = body;
-    if (f) {
-      $("attach").querySelector("span").textContent = "Envoi en cours…";
-      // Les photos sont compressées avant l'envoi (≈ 10 fois plus légères)
-      let file = f, type = f.type;
-      if (f.type.startsWith("image/") && f.type !== "image/gif") {
-        try { const small = await compressPhoto(f); if (small.size < f.size) { file = small; type = "image/jpeg"; } } catch {}
-      }
-      if (file.size > MAX_FILE) throw new Error("Fichier trop lourd (50 Mo maximum).");
-      const ext = type === "image/jpeg" && file !== f ? "jpg" : ((f.name.split(".").pop() || "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 5) || (f.type.split("/")[1] || "bin"));
-      const path = `${cid}/${crypto.randomUUID()}.${ext}`;
-      const { error } = await sb.storage.from("media").upload(path, file, { contentType: type, upsert: false });
-      if (error) throw new Error(/size|large/i.test(error.message) ? "Fichier trop lourd (50 Mo maximum)." : "L'envoi du fichier a échoué. Réessayez.");
-      row.media_path = path; row.media_kind = f.type.startsWith("video/") ? "video" : "image";
+    if (!pending.length) { await insertMessage(cid, { body }); text.value = ""; grow(); }
+    const total = pending.length;
+    while (pending.length) {
+      const f = pending[0], k = total - pending.length + 1;
+      renderAttach(total > 1 ? `Envoi ${k}/${total}…` : "Envoi en cours…");
+      const media = await uploadOne(cid, f);
+      await insertMessage(cid, body ? { body, ...media } : media);
+      if (body) { body = ""; text.value = ""; grow(); }
+      URL.revokeObjectURL(f._url); pending.shift();
     }
-    const { data, error } = await sb.from("messages").insert(row).select().single();
-    if (error) throw new Error(S.me.blocked ? "Votre compte est bloqué." : "Le message n'a pas pu être envoyé. Réessayez.");
-    text.value = ""; grow(); clearAttach(); stickBottom = true;
-    addMessage(data); renderConvs(); if (S.current === cid) renderThread();
+    renderAttach();
   } catch (e) {
-    showErr(e.message || "L'envoi a échoué. Vérifiez votre connexion.");
-    if (pending) $("attach").querySelector("span").textContent = "Prêt à renvoyer";
+    showErr((e.message || "L'envoi a échoué.") + (pending.length ? " Les fichiers restants sont prêts à être renvoyés." : ""));
+    renderAttach();
   }
   updateSend();
 }
