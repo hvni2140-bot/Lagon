@@ -1,15 +1,15 @@
-/* Lagon — messagerie. Deux colonnes sur grand écran, une seule sur téléphone. */
+/* Sunset — messagerie. Deux colonnes sur grand écran, une seule sur téléphone. */
 :root {
-  --bg: #EEF4F3; --surface: #FFFFFF; --fg: #10292E; --muted: #56706F; --line: #D3E1DF;
-  --accent: #0B7C80; --accent-fg: #FFFFFF; --coral: #D9483B; --soft: #DDEDEB; --bubble: #FFFFFF;
+  --bg: #F7F1EB; --surface: #FFFFFF; --fg: #24160E; --muted: #7A6455; --line: #E8DACD;
+  --accent: #C2501A; --accent-fg: #FFFFFF; --coral: #C0283A; --soft: #F7E2D1; --bubble: #FFFFFF;
   --display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
   --body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0A181B; --surface: #112529; --fg: #E2EFEE; --muted: #8EA8A9; --line: #21403F;
-    --accent: #2BA9A6; --accent-fg: #03211F; --coral: #FF7B6C; --soft: #16343A; --bubble: #17323A;
+    --bg: #0D0A09; --surface: #17110E; --fg: #F4E9DF; --muted: #A99485; --line: #2F241D;
+    --accent: #F0923A; --accent-fg: #1C0E04; --coral: #FF6B6B; --soft: #2B1D14; --bubble: #221813;
     color-scheme: dark;
   }
 }
