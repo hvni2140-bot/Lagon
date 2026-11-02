@@ -368,7 +368,7 @@ async function deleteMsg(m) {
   const { data, error } = await sb.from("messages").delete().eq("id", m.id).select("id");
   if (error || !data || !data.length) { toast("Suppression impossible."); return; }
   removeMessage(m.id); renderConvs(); renderThread(); toast("Message supprimé");
-  if (m.media_path && m.sender_id === S.me.id) sb.storage.from("media").remove([m.media_path]);
+  if (m.media_path && (m.sender_id === S.me.id || S.me.is_admin)) sb.storage.from("media").remove([m.media_path]);
 }
 
 /* ---------- envoi ---------- */
