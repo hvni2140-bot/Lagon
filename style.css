@@ -157,3 +157,24 @@ button.row:hover { background: var(--bg); }
 .profile-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 .profile-actions label.btn { display: inline-block; color: var(--accent-fg); font-size: 15px; cursor: pointer; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+/* ---- Conditions d'utilisation ---- */
+.terms-card { max-width: 520px; }
+.terms-text { max-height: 46vh; overflow-y: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
+.terms-text p { margin: 0; }
+label.check { flex-direction: row; align-items: center; gap: 10px; font-size: 15px; color: var(--fg); }
+label.check input { width: 22px; height: 22px; padding: 0; accent-color: var(--accent); }
+
+/* ---- Gestion : onglets, galerie, discussions ---- */
+.seg3 { grid-template-columns: 1fr 1fr 1fr; }
+.adm-sec { display: flex; flex-direction: column; gap: 12px; }
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.tile { position: relative; padding: 0; border: 0; border-radius: 10px; overflow: hidden; aspect-ratio: 1; background: #000; max-width: 100%; }
+.tile img, .tile video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tile .play { position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; display: grid; place-items: center; font-size: 11px; }
+.tile-cap { position: absolute; inset: auto 0 0 0; padding: 18px 8px 6px; background: linear-gradient(transparent, rgba(0,0,0,.75)); color: #fff; text-align: left; display: flex; flex-direction: column; font-size: 11px; line-height: 1.3; }
+.tile-cap b { font-size: 12px; }
+.tile-cap span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pair { display: flex; }
+.pair .av.mini2 { width: 30px; height: 30px; font-size: 13px; border: 2px solid var(--surface); }
+.pair .av.mini2 + .av.mini2 { margin-left: -10px; }

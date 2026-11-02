@@ -39,7 +39,12 @@ function dayLabel(iso) {
   return d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
 }
 function fmtBytes(b) { return b >= 1e6 ? Math.round(b / 1e6) + " Mo" : Math.round(b / 1e3) + " Ko"; }
-function convTitle(c) { return c.is_group ? (c.title || "Groupe") : nameOf(c.other); }
+function convTitle(c) {
+  if (c.is_group) return c.title || "Groupe";
+  if (c.mine) return nameOf(c.other);
+  return c.members.map(nameOf).join(" ↔ ");
+}
+const findConv = (id) => S.convs.find((x) => x.id === id) || (S.otherConvs || []).find((x) => x.id === id);
 function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 
 // Photo de profil : un rond avec l'initiale, remplacé par la photo quand elle existe.
@@ -99,7 +104,23 @@ $("auth-form").addEventListener("submit", async (e) => {
   btn.disabled = false;
 });
 
+function showTerms() {
+  $("auth").hidden = true; $("app").hidden = true; $("terms").hidden = false;
+  $("terms-check").checked = false; $("terms-accept").disabled = true;
+}
+$("terms-check").addEventListener("change", () => { $("terms-accept").disabled = !$("terms-check").checked; });
+$("terms-refuse").onclick = () => { $("terms").hidden = true; sb.auth.signOut(); };
+$("terms-accept").onclick = async () => {
+  const btn = $("terms-accept"), err = $("terms-err"); btn.disabled = true; err.hidden = true;
+  const { error } = await sb.rpc("accept_terms");
+  if (error) { err.textContent = "L'acceptation n'a pas pu être enregistrée. Réessayez."; err.hidden = false; btn.disabled = false; return; }
+  $("terms").hidden = true;
+  const { data: { session } } = await sb.auth.getSession();
+  S.me = null; entering = false; if (session) enter(session);
+};
+
 function showAuth() {
+  $("terms").hidden = true;
   S.me = null; entering = false;
   if (channel) { sb.removeChannel(channel); channel = null; }
   $("app").hidden = true; $("auth").hidden = false;
@@ -110,6 +131,7 @@ async function enter(session) {
   const { data: me, error } = await sb.from("profiles").select("*").eq("id", session.user.id).single();
   if (error || !me) { entering = false; toast("Profil introuvable. Reconnectez-vous."); await sb.auth.signOut(); return; }
   S.me = me;
+  if (!me.terms_accepted_at) { showTerms(); return; }
   await loadProfiles();
   await loadConvs();
   subscribe();
@@ -133,10 +155,13 @@ async function loadProfiles() {
 async function loadConvs() {
   const { data, error } = await sb.from("conversations").select("id,is_group,title,created_at,conversation_members(user_id)");
   if (error) { toast("Impossible de charger les discussions."); return; }
-  S.convs = (data || []).map((c) => ({
-    ...c,
-    other: c.is_group ? null : (c.conversation_members.find((m) => m.user_id !== S.me.id) || {}).user_id,
-  }));
+  const all = (data || []).map((c) => {
+    const members = c.conversation_members.map((m) => m.user_id);
+    return { ...c, members, mine: c.is_group || members.includes(S.me.id),
+      other: c.is_group ? null : members.find((id) => id !== S.me.id) };
+  });
+  S.convs = all.filter((c) => c.mine);
+  S.otherConvs = all.filter((c) => !c.mine); // visibles par le gérant seulement
   await Promise.all(S.convs.filter((c) => !S.last.has(c.id)).map(async (c) => {
     const { data } = await sb.from("messages").select("*").eq("conversation_id", c.id).order("created_at", { ascending: false }).limit(1);
     if (data && data[0]) S.last.set(c.id, data[0]);
@@ -159,10 +184,11 @@ function subscribe() {
 }
 
 async function onInsert(m) {
-  if (!S.convs.some((c) => c.id === m.conversation_id)) await loadConvs();
+  if (!findConv(m.conversation_id)) await loadConvs();
   if (!S.profiles.has(m.sender_id)) await loadProfiles();
   addMessage(m);
-  if (m.sender_id !== S.me.id && (m.conversation_id !== S.current || document.hidden || S.view !== "chat")) S.unread.add(m.conversation_id);
+  const mine = S.convs.some((c) => c.id === m.conversation_id);
+  if (mine && m.sender_id !== S.me.id && (m.conversation_id !== S.current || document.hidden || S.view !== "chat")) S.unread.add(m.conversation_id);
   renderConvs();
   if (m.conversation_id === S.current) renderThread();
 }
@@ -242,14 +268,16 @@ async function openConv(cid) {
   if (S.current !== cid) { nodes.clear(); $("thread").replaceChildren(); S.sel = null; S.confirm = null; }
   S.current = cid; S.unread.delete(cid); stickBottom = true;
   showView("chat");
-  const c = S.convs.find((x) => x.id === cid); if (!c) return;
+  const c = findConv(cid); if (!c) return;
   const title = convTitle(c);
   $("chat-title").textContent = title;
   $("chat-av").className = "av" + (c.is_group ? " group" : "");
   if (c.is_group) { $("chat-av").style.backgroundImage = ""; $("chat-av").textContent = "#"; } else fillAvatar($("chat-av"), c.other);
-  $("chat-sub").textContent = c.is_group ? S.profiles.size + (S.profiles.size > 1 ? " membres" : " membre") : "Discussion privée · visible uniquement par vous deux";
-  const blocked = S.me.blocked;
-  $("composer").hidden = blocked; $("blocked-note").hidden = !blocked;
+  $("chat-sub").textContent = c.is_group ? S.profiles.size + (S.profiles.size > 1 ? " membres" : " membre")
+    : !c.mine ? "Lecture seule · discussion privée entre membres"
+    : S.me.is_admin ? "Discussion privée" : "Discussion privée · le gérant peut la consulter";
+  const blocked = S.me.blocked, readonly = !c.mine;
+  $("composer").hidden = blocked || readonly; $("blocked-note").hidden = !blocked || readonly; $("readonly-note").hidden = !readonly;
   renderConvs();
   if (!S.msgs.has(cid)) { $("thread").replaceChildren(Object.assign(el("div", "empty"), { innerHTML: "<b>Chargement…</b>" })); await loadMessages(cid); }
   if (S.current === cid) renderThread();
@@ -298,7 +326,7 @@ function buildMsg(m) {
 
 function renderThread() {
   const cid = S.current, list = S.msgs.get(cid); if (!list) return;
-  const c = S.convs.find((x) => x.id === cid);
+  const c = findConv(cid);
   const th = $("thread"), out = [], seen = new Set();
   let lastDay = null, prev = null;
   for (const m of list) {
@@ -314,10 +342,10 @@ function renderThread() {
     const first = !prev || prev.sender_id !== m.sender_id || Date.parse(m.created_at) - Date.parse(prev.created_at) > 5 * 60000;
     n.classList.toggle("mine", own); n.classList.toggle("first", first);
     const r = n._r, selected = S.sel === m.id;
-    r.who.hidden = own || !first || !c?.is_group;
+    r.who.hidden = own || !first || !(c?.is_group || !c?.mine);
     if (!r.who.hidden) { r.who.replaceChildren(avatar(m.sender_id, " mini"), el("span", null, nameOf(m.sender_id))); }
     r.meta.textContent = hhmm(m.created_at); r.meta.hidden = !(first || selected);
-    const canDel = own || (S.me.is_admin && c?.is_group);
+    const canDel = own || S.me.is_admin;
     r.tools.hidden = !(selected && canDel);
     const armed = S.confirm === m.id;
     r.del.className = armed ? "danger" : ""; r.del.textContent = armed ? "Confirmer la suppression" : "Supprimer";
@@ -468,7 +496,60 @@ $("new-member").addEventListener("submit", async (e) => {
   btn.disabled = false; btn.textContent = "Créer le compte";
 });
 
-$("btn-admin").onclick = async () => { await loadProfiles(); $("creds").hidden = true; renderAdmin(); showView("admin"); };
+$("btn-admin").onclick = async () => { await loadProfiles(); $("creds").hidden = true; renderAdmin(); admTab("members"); showView("admin"); };
+
+function admTab(t) {
+  for (const k of ["members", "gallery", "convs"]) {
+    $("adm-tab-" + k).setAttribute("aria-selected", k === t);
+    $("adm-" + k).hidden = k !== t;
+  }
+  if (t === "gallery") renderGallery();
+  if (t === "convs") renderAllConvs();
+}
+$("adm-tab-members").onclick = () => admTab("members");
+$("adm-tab-gallery").onclick = () => admTab("gallery");
+$("adm-tab-convs").onclick = () => admTab("convs");
+
+async function renderGallery() {
+  const g = $("gallery");
+  g.replaceChildren(el("p", "muted small", "Chargement…"));
+  await loadConvs();
+  const { data, error } = await sb.from("messages").select("id,conversation_id,sender_id,media_path,media_kind,created_at")
+    .not("media_path", "is", null).order("created_at", { ascending: false }).limit(200);
+  if (error) { g.replaceChildren(el("p", "err", "La galerie n'a pas pu être chargée.")); return; }
+  if (!data.length) { g.replaceChildren(el("p", "muted", "Aucune photo ni vidéo envoyée pour l'instant.")); return; }
+  g.replaceChildren();
+  for (const m of data) {
+    const c = findConv(m.conversation_id);
+    const tile = el("button", "tile"); tile.type = "button";
+    const media = m.media_kind === "video" ? Object.assign(document.createElement("video"), { muted: true, playsInline: true, preload: "metadata" }) : Object.assign(document.createElement("img"), { alt: "Photo de " + nameOf(m.sender_id), loading: "lazy" });
+    mediaUrl(m.media_path).then((u) => (media.src = m.media_kind === "video" ? u + "#t=0.1" : u)).catch(() => {});
+    tile.append(media);
+    if (m.media_kind === "video") tile.append(el("span", "play", "▶"));
+    const cap = el("span", "tile-cap");
+    cap.append(el("b", null, nameOf(m.sender_id)), el("span", null, (c ? (c.is_group ? "Groupe" : convTitle(c)) : "") + " · " + shortWhen(m.created_at)));
+    tile.append(cap);
+    tile.onclick = () => { if (c) openConv(c.id); };
+    g.append(tile);
+  }
+}
+
+async function renderAllConvs() {
+  const list = $("all-convs");
+  list.replaceChildren(el("div", "row muted", "Chargement…"));
+  await loadConvs();
+  const dms = [...S.convs.filter((c) => !c.is_group), ...(S.otherConvs || [])];
+  list.replaceChildren();
+  if (!dms.length) { list.append(el("div", "row muted", "Aucune discussion privée pour l'instant.")); return; }
+  for (const c of dms) {
+    const b = el("button", "row"); b.type = "button";
+    const avs = el("div", "pair");
+    for (const id of c.members.slice(0, 2)) avs.append(avatar(id, " mini2"));
+    b.append(avs, el("div", "grow", c.members.map(nameOf).join(" ↔ ")));
+    b.onclick = () => openConv(c.id);
+    list.append(b);
+  }
+}
 function renderAdmin() {
   const list = $("admin-list"); list.replaceChildren();
   for (const p of S.profiles.values()) {
