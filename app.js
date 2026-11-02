@@ -275,7 +275,7 @@ async function openConv(cid) {
   if (c.is_group) { $("chat-av").style.backgroundImage = ""; $("chat-av").textContent = "#"; } else fillAvatar($("chat-av"), c.other);
   $("chat-sub").textContent = c.is_group ? S.profiles.size + (S.profiles.size > 1 ? " membres" : " membre")
     : !c.mine ? "Lecture seule · discussion privée entre membres"
-    : S.me.is_admin ? "Discussion privée" : "Discussion privée · le gérant peut la consulter";
+    : "Discussion privée";
   const blocked = S.me.blocked, readonly = !c.mine;
   $("composer").hidden = blocked || readonly; $("blocked-note").hidden = !blocked || readonly; $("readonly-note").hidden = !readonly;
   renderConvs();
@@ -356,7 +356,7 @@ function renderThread() {
     const e = el("div", "empty");
     e.innerHTML = c?.is_group
       ? "<b>Le groupe est vide</b>Écrivez le premier message ou envoyez une photo avec le bouton image."
-      : "<b>Nouvelle discussion privée</b>Seules vous deux pouvez lire ces messages.";
+      : "<b>Nouvelle discussion privée</b>Écrivez le premier message.";
     th.replaceChildren(e); return;
   }
   const cur = [...th.children];
