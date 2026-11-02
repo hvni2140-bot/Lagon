@@ -253,7 +253,7 @@ async function openConv(cid) {
   $("chat-title").textContent = title;
   $("chat-av").textContent = c.is_group ? "#" : initial(title);
   $("chat-av").className = "av" + (c.is_group ? " group" : "");
-  $("chat-sub").textContent = c.is_group ? S.profiles.size + " membres" : "Discussion privée · visible uniquement par vous deux";
+  $("chat-sub").textContent = c.is_group ? S.profiles.size + (S.profiles.size > 1 ? " membres" : " membre") : "Discussion privée · visible uniquement par vous deux";
   const blocked = S.me.blocked;
   $("composer").hidden = blocked; $("blocked-note").hidden = !blocked;
   renderConvs();
