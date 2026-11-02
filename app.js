@@ -249,6 +249,7 @@ async function loadConvs() {
     const { data } = await sb.from("messages").select("*").eq("conversation_id", c.id).order("created_at", { ascending: false }).limit(1);
     if (data && data[0]) S.last.set(c.id, data[0]);
   }));
+  computeUnread();
   renderConvs();
 }
 
@@ -266,12 +267,33 @@ function subscribe() {
     .subscribe();
 }
 
+/* ---------- messages non lus (mémorisés sur l'appareil) ---------- */
+function readMap() {
+  try { return JSON.parse(localStorage.getItem("sunset-read-" + S.me.id) || "null"); } catch { return null; }
+}
+function saveReadMap(map) { try { localStorage.setItem("sunset-read-" + S.me.id, JSON.stringify(map)); } catch {} }
+function markRead(cid) {
+  const map = readMap() || {}; map[cid] = new Date().toISOString(); saveReadMap(map);
+  S.unread.delete(cid);
+}
+function computeUnread() {
+  let map = readMap();
+  if (!map) { // première ouverture sur cet appareil : on part de zéro
+    map = {}; for (const c of S.convs) map[c.id] = new Date().toISOString(); saveReadMap(map); return;
+  }
+  for (const c of S.convs) {
+    const last = S.last.get(c.id);
+    if (last && last.sender_id !== S.me.id && (!map[c.id] || last.created_at > map[c.id]) && c.id !== S.current) S.unread.add(c.id);
+  }
+}
+
 async function onInsert(m) {
   if (!findConv(m.conversation_id)) await loadConvs();
   if (!S.profiles.has(m.sender_id)) await loadProfiles();
   addMessage(m);
   const mine = S.convs.some((c) => c.id === m.conversation_id);
   if (mine && m.sender_id !== S.me.id && (m.conversation_id !== S.current || document.hidden || S.view !== "chat")) S.unread.add(m.conversation_id);
+  else if (mine && m.conversation_id === S.current) markRead(m.conversation_id);
   renderConvs();
   if (m.conversation_id === S.current) renderThread();
 }
@@ -299,7 +321,7 @@ function onDelete(old) {
 }
 
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden && S.current && S.view === "chat") { S.unread.delete(S.current); renderConvs(); }
+  if (!document.hidden && S.current && S.view === "chat") { markRead(S.current); renderConvs(); }
 });
 
 /* ---------- liste des discussions ---------- */
@@ -332,6 +354,9 @@ function renderConvs() {
     list.append(b);
   }
   const n = S.unread.size; document.title = n ? `(${n}) Sunset` : "Sunset";
+  // Sur téléphone, le bouton retour montre aussi un point rouge s'il y a du nouveau ailleurs
+  const back = $("btn-back"); back.querySelector(".red-dot")?.remove();
+  if ([...S.unread].some((id) => id !== S.current)) back.append(el("span", "red-dot"));
 }
 
 /* ---------- navigation ---------- */
@@ -349,7 +374,7 @@ $("profile-back").onclick = backFromPanel;
 
 async function openConv(cid) {
   if (S.current !== cid) { nodes.clear(); $("thread").replaceChildren(); S.sel = null; S.confirm = null; }
-  S.current = cid; S.unread.delete(cid); stickBottom = true;
+  S.current = cid; markRead(cid); stickBottom = true;
   showView("chat");
   const c = findConv(cid); if (!c) return;
   const title = convTitle(c);

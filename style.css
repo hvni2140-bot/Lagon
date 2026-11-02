@@ -68,7 +68,7 @@ input { border: 1px solid var(--line); border-radius: 10px; background: var(--bg
 .conv .name { font-weight: 700; display: flex; gap: 6px; align-items: center; }
 .conv .prev { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .conv .time { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; flex: none; }
-.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--coral); flex: none; }
+.dot { width: 11px; height: 11px; border-radius: 50%; background: #E0245E; flex: none; }
 .lock { width: 12px; height: 12px; color: var(--muted); }
 .av { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; background: var(--soft); color: var(--accent); flex: none; }
 .av.group { background: var(--accent); color: var(--accent-fg); }
@@ -240,5 +240,5 @@ label.check input { width: 22px; height: 22px; padding: 0; accent-color: var(--a
 .welcome { margin: 0; padding: 10px 14px; border-radius: 10px; background: var(--soft); color: var(--fg); font-weight: 600; }
 
 /* ---- Point rouge : demandes de compte en attente ---- */
-#btn-admin, #adm-tab-members { position: relative; }
+#btn-admin, #adm-tab-members, #btn-back { position: relative; }
 .red-dot { position: absolute; top: 2px; right: 2px; width: 10px; height: 10px; border-radius: 50%; background: #E0245E; border: 2px solid var(--surface); }
