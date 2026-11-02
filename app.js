@@ -385,7 +385,8 @@ function clearAttach() { pending = null; $("file").value = ""; $("attach").hidde
 $("file").addEventListener("change", () => {
   const f = $("file").files[0]; showErr(""); if (!f) return;
   if (!/^(image|video)\//.test(f.type)) { showErr("Choisissez une photo ou une vidéo."); $("file").value = ""; return; }
-  if (f.size > MAX_FILE) { showErr("Ce fichier fait " + fmtBytes(f.size) + ". La limite est de 50 Mo : raccourcissez la vidéo."); $("file").value = ""; return; }
+  const isPhoto = f.type.startsWith("image/") && f.type !== "image/gif";
+  if (!isPhoto && f.size > MAX_FILE) { showErr("Ce fichier fait " + fmtBytes(f.size) + ". La limite est de 50 Mo : raccourcissez la vidéo."); $("file").value = ""; return; }
   pending = f;
   const url = URL.createObjectURL(f);
   const prev = f.type.startsWith("video/") ? Object.assign(document.createElement("video"), { src: url, muted: true, playsInline: true }) : Object.assign(document.createElement("img"), { src: url, alt: "Aperçu" });
@@ -393,6 +394,23 @@ $("file").addEventListener("change", () => {
   const x = el("button", null, "Retirer"); x.type = "button"; x.onclick = clearAttach;
   $("attach").replaceChildren(prev, lbl, x); $("attach").hidden = false; updateSend(); text.focus();
 });
+
+// Réduit une photo à 1600 pixels maximum (côté le plus long), en JPEG qualité 80 %.
+function compressPhoto(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const scale = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.naturalWidth * scale); c.height = Math.round(img.naturalHeight * scale);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      c.toBlob((b) => (b ? resolve(b) : reject(new Error("conversion"))), "image/jpeg", 0.8);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("lecture")); };
+    img.src = url;
+  });
+}
 
 async function send() {
   const cid = S.current, body = text.value.trim().slice(0, 2000), f = pending;
@@ -403,9 +421,15 @@ async function send() {
     if (body) row.body = body;
     if (f) {
       $("attach").querySelector("span").textContent = "Envoi en cours…";
-      const ext = (f.name.split(".").pop() || "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 5) || (f.type.split("/")[1] || "bin");
+      // Les photos sont compressées avant l'envoi (≈ 10 fois plus légères)
+      let file = f, type = f.type;
+      if (f.type.startsWith("image/") && f.type !== "image/gif") {
+        try { const small = await compressPhoto(f); if (small.size < f.size) { file = small; type = "image/jpeg"; } } catch {}
+      }
+      if (file.size > MAX_FILE) throw new Error("Fichier trop lourd (50 Mo maximum).");
+      const ext = type === "image/jpeg" && file !== f ? "jpg" : ((f.name.split(".").pop() || "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 5) || (f.type.split("/")[1] || "bin"));
       const path = `${cid}/${crypto.randomUUID()}.${ext}`;
-      const { error } = await sb.storage.from("media").upload(path, f, { contentType: f.type, upsert: false });
+      const { error } = await sb.storage.from("media").upload(path, file, { contentType: type, upsert: false });
       if (error) throw new Error(/size|large/i.test(error.message) ? "Fichier trop lourd (50 Mo maximum)." : "L'envoi du fichier a échoué. Réessayez.");
       row.media_path = path; row.media_kind = f.type.startsWith("video/") ? "video" : "image";
     }
