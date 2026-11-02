@@ -266,7 +266,7 @@ function renderConvs() {
 /* ---------- navigation ---------- */
 function showView(v) {
   S.view = v;
-  $("chat").hidden = v !== "chat"; $("picker").hidden = v !== "picker"; $("admin").hidden = v !== "admin"; $("profile").hidden = v !== "profile";
+  for (const id of ["chat", "picker", "admin", "profile", "person"]) $(id).hidden = v !== id;
   $("app").classList.add("in-chat");
 }
 function showList() { $("app").classList.remove("in-chat"); }
@@ -285,6 +285,8 @@ async function openConv(cid) {
   $("chat-title").textContent = title;
   $("chat-av").className = "av" + (c.is_group ? " group" : "");
   if (c.is_group) { $("chat-av").style.backgroundImage = ""; $("chat-av").textContent = "#"; } else fillAvatar($("chat-av"), c.other);
+  S.headPerson = c.is_group || !c.mine ? null : c.other;
+  $("chat-head-btn").classList.toggle("linkish", !!S.headPerson);
   $("chat-sub").textContent = c.is_group ? S.profiles.size + (S.profiles.size > 1 ? " membres" : " membre")
     : !c.mine ? "Lecture seule · discussion privée entre membres"
     : "Discussion privée";
@@ -355,7 +357,7 @@ function renderThread() {
     n.classList.toggle("mine", own); n.classList.toggle("first", first);
     const r = n._r, selected = S.sel === m.id;
     r.who.hidden = own || !first || !(c?.is_group || !c?.mine);
-    if (!r.who.hidden) { r.who.replaceChildren(avatar(m.sender_id, " mini"), el("span", null, nameOf(m.sender_id))); }
+    if (!r.who.hidden) { r.who.replaceChildren(avatar(m.sender_id, " mini"), el("span", null, nameOf(m.sender_id))); r.who.onclick = () => openPerson(m.sender_id); }
     r.meta.textContent = hhmm(m.created_at); r.meta.hidden = !(first || selected);
     const canDel = own || S.me.is_admin;
     r.tools.hidden = !(selected && canDel);
@@ -593,7 +595,8 @@ function renderAdmin() {
     const who = el("div", "grow");
     const sub = p.login ? "Identifiant : " + p.login : "Connexion par email";
     who.append(el("b", null, p.display_name + (p.id === S.me.id ? " (vous)" : "")), document.createElement("br"), el("span", "muted small", sub));
-    row.append(avatar(p.id), who);
+    const avb = avatar(p.id); avb.classList.add("tap"); avb.onclick = () => openPerson(p.id);
+    row.append(avb, who);
     if (p.is_admin) row.append(el("span", "chip admin", "Gérant"));
     if (p.blocked) row.append(el("span", "chip", "Bloqué"));
     if (p.id !== S.me.id) {
@@ -649,10 +652,10 @@ function squareJpeg(file) {
 }
 
 async function setAvatar(path) {
-  const old = S.me.avatar_path;
+  // Chaque nouvelle photo de profil rejoint l'onglet « Photos de profil » (comme sur Facebook)
+  if (path) await sb.from("profile_photos").insert({ path, kind: "avatar" });
   const { error } = await sb.from("profiles").update({ avatar_path: path }).eq("id", S.me.id);
   if (error) throw error;
-  if (old && old !== path) sb.storage.from("avatars").remove([old]);
   await loadProfiles(); renderMe(); renderProfile(); renderConvs();
   if (S.current) { nodes.clear(); $("thread").replaceChildren(); renderThread(); }
 }
@@ -682,3 +685,205 @@ $("pf-form").addEventListener("submit", async (e) => {
   if (error) { err.textContent = "Le nom n'a pas pu être enregistré."; err.hidden = false; return; }
   await loadProfiles(); renderMe(); renderConvs(); toast("Nom enregistré");
 });
+
+/* ---------- page profil d'un membre ---------- */
+const HEART = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.3A4.2 4.2 0 0 1 12 7.6a4.2 4.2 0 0 1 7.5 2.6c0 5.7-7.5 10.3-7.5 10.3z"/></svg>';
+const COMMENT = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg>';
+S.person = null; S.personTab = "avatar"; S.personPhotos = [];
+
+$("chat-head-btn").onclick = () => { if (S.headPerson) openPerson(S.headPerson); };
+$("pf-public").onclick = () => openPerson(S.me.id);
+$("person-back").onclick = () => { if (S.prevView === "profile") showView("profile"); else backFromPanel(); };
+
+async function openPerson(id) {
+  S.prevView = S.view;
+  S.person = id; S.personTab = "avatar";
+  if (!S.profiles.has(id)) await loadProfiles();
+  showView("person");
+  renderPersonHead();
+  await loadPersonPhotos();
+}
+
+function renderPersonHead() {
+  const id = S.person, p = S.profiles.get(id) || {}, mine = id === S.me.id;
+  $("person-title").textContent = mine ? "Mon profil public" : "Profil";
+  fillAvatar($("ps-av"), id);
+  $("ps-name").textContent = p.display_name || "Membre";
+  $("ps-admin").hidden = !p.is_admin;
+  $("ps-dm").hidden = mine;
+  $("ps-add").hidden = !(mine && S.personTab === "album");
+  for (const t of ["avatar", "album"]) $("ps-tab-" + t).setAttribute("aria-selected", S.personTab === t);
+}
+$("ps-tab-avatar").onclick = () => { S.personTab = "avatar"; renderPersonHead(); renderPersonGrid(); };
+$("ps-tab-album").onclick = () => { S.personTab = "album"; renderPersonHead(); renderPersonGrid(); };
+$("ps-dm").onclick = async () => {
+  const { data, error } = await sb.rpc("open_dm", { other: S.person });
+  if (error) { toast("Impossible d'ouvrir la discussion."); return; }
+  await loadConvs(); openConv(data);
+};
+$("ps-av").onclick = () => {
+  const p = S.profiles.get(S.person);
+  const ph = p && p.avatar_path && S.personPhotos.find((x) => x.path === p.avatar_path);
+  if (ph) openViewer(ph);
+};
+
+async function loadPersonPhotos() {
+  const id = S.person;
+  $("ps-grid").replaceChildren(el("p", "muted small", "Chargement…"));
+  const { data, error } = await sb.from("profile_photos")
+    .select("id,owner_id,path,kind,created_at,photo_likes(count),photo_comments(count)")
+    .eq("owner_id", id).order("created_at", { ascending: false });
+  if (id !== S.person) return;
+  if (error) { $("ps-grid").replaceChildren(el("p", "err", "Les photos n'ont pas pu être chargées.")); return; }
+  S.personPhotos = (data || []).map((x) => ({ ...x, likes: (x.photo_likes[0] || {}).count || 0, comments: (x.photo_comments[0] || {}).count || 0 }));
+  renderPersonGrid();
+}
+
+function renderPersonGrid() {
+  const g = $("ps-grid"), mine = S.person === S.me.id, p = S.profiles.get(S.person) || {};
+  const kind = S.personTab === "avatar" ? "avatar" : "photo";
+  const list = S.personPhotos.filter((x) => x.kind === kind);
+  g.replaceChildren();
+  if (!list.length) {
+    g.append(el("p", "muted", kind === "avatar"
+      ? (mine ? "Vos photos de profil apparaîtront ici. Changez-la depuis « Mon profil »." : "Pas encore de photo de profil.")
+      : (mine ? "Ajoutez des photos pour que les autres membres voient à quoi vous ressemblez." : "Pas encore de photos.")));
+    return;
+  }
+  for (const ph of list) {
+    const tile = el("button", "tile"); tile.type = "button";
+    const img = Object.assign(document.createElement("img"), { alt: "Photo de " + (p.display_name || "membre"), loading: "lazy" });
+    signedUrl("avatars", ph.path).then((u) => (img.src = u)).catch(() => {});
+    tile.append(img);
+    if (ph.path === p.avatar_path) tile.append(el("span", "badge", "Actuelle"));
+    const cap = el("span", "tile-stats");
+    cap.innerHTML = HEART + "<b></b>" + COMMENT + "<b></b>";
+    cap.querySelectorAll("b")[0].textContent = ph.likes; cap.querySelectorAll("b")[1].textContent = ph.comments;
+    tile.append(cap);
+    tile.onclick = () => openViewer(ph);
+    g.append(tile);
+  }
+}
+
+$("ps-file").addEventListener("change", async () => {
+  const files = [...$("ps-file").files].filter((f) => f.type.startsWith("image/")); $("ps-file").value = "";
+  if (!files.length) return;
+  const err = $("ps-err"); err.hidden = true;
+  const label = $("ps-add-label"); let done = 0;
+  for (const f of files.slice(0, 10)) {
+    label.textContent = `Envoi ${done + 1}/${Math.min(files.length, 10)}…`;
+    try {
+      let blob = f; try { const small = await compressPhoto(f); if (small.size < f.size) blob = small; } catch {}
+      const path = `${S.me.id}/album/${crypto.randomUUID()}.jpg`;
+      const up = await sb.storage.from("avatars").upload(path, blob, { contentType: "image/jpeg" });
+      if (up.error) throw up.error;
+      const ins = await sb.from("profile_photos").insert({ path, kind: "photo" });
+      if (ins.error) { sb.storage.from("avatars").remove([path]); throw ins.error; }
+      done++;
+    } catch { err.textContent = "Une photo n'a pas pu être ajoutée. Essayez une autre image."; err.hidden = false; }
+  }
+  label.textContent = "Ajouter des photos";
+  if (done) toast(done > 1 ? done + " photos ajoutées" : "Photo ajoutée");
+  await loadPersonPhotos();
+});
+
+/* ---------- visionneuse : j'aime et commentaires ---------- */
+let viewing = null, delArmed = null;
+function closeViewer() { $("viewer").hidden = true; viewing = null; if (S.view === "person") loadPersonPhotos(); }
+$("vw-close").onclick = closeViewer;
+$("viewer").addEventListener("click", (e) => { if (e.target === $("viewer")) closeViewer(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("viewer").hidden) closeViewer(); });
+
+async function openViewer(ph) {
+  viewing = ph; delArmed = null;
+  const owner = S.profiles.get(ph.owner_id) || {};
+  fillAvatar($("vw-av"), ph.owner_id);
+  $("vw-name").textContent = owner.display_name || "Membre";
+  $("vw-date").textContent = (ph.kind === "avatar" ? "Photo de profil · " : "") + new Date(ph.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+  $("vw-img").removeAttribute("src");
+  signedUrl("avatars", ph.path).then((u) => { if (viewing === ph) $("vw-img").src = u; }).catch(() => {});
+  const canDel = ph.owner_id === S.me.id || S.me.is_admin;
+  $("vw-del").hidden = !canDel; $("vw-del").textContent = "Supprimer la photo";
+  $("vw-input").value = "";
+  $("vw-form").hidden = !!S.me.blocked;
+  $("viewer").hidden = false;
+  await refreshViewer();
+}
+
+async function refreshViewer() {
+  const ph = viewing; if (!ph) return;
+  const [likes, comments] = await Promise.all([
+    sb.from("photo_likes").select("user_id,created_at").eq("photo_id", ph.id).order("created_at"),
+    sb.from("photo_comments").select("id,user_id,body,created_at").eq("photo_id", ph.id).order("created_at"),
+  ]);
+  if (viewing !== ph) return;
+  const likers = (likes.data || []).map((l) => l.user_id);
+  const liked = likers.includes(S.me.id);
+  const btn = $("vw-like");
+  btn.classList.toggle("on", liked);
+  btn.setAttribute("aria-pressed", liked);
+  btn.innerHTML = HEART + "<span>" + (liked ? "J'aime" : "J'aime") + "</span>";
+  btn.disabled = !!S.me.blocked;
+  const names = likers.map((id) => (id === S.me.id ? "Vous" : nameOf(id)));
+  $("vw-likers").textContent = !names.length ? "Soyez le premier à aimer cette photo"
+    : names.length <= 3 ? "Aimé par " + names.join(", ")
+    : "Aimé par " + names.slice(0, 2).join(", ") + " et " + (names.length - 2) + " autres";
+  $("vw-count").textContent = likers.length;
+  const box = $("vw-comments"); box.replaceChildren();
+  const list = comments.data || [];
+  if (!list.length) box.append(el("p", "muted small", "Aucun commentaire pour l'instant."));
+  for (const c of list) {
+    const row = el("div", "comment");
+    const av = avatar(c.user_id, " mini2"); av.classList.add("tap"); av.onclick = () => { closeViewer(); openPerson(c.user_id); };
+    const body = el("div", "grow");
+    const head = el("div", "comment-head");
+    head.append(el("b", null, nameOf(c.user_id)), el("span", "muted small", shortWhen(c.created_at)));
+    body.append(head, el("p", "comment-text", c.body));
+    row.append(av, body);
+    if (c.user_id === S.me.id || ph.owner_id === S.me.id || S.me.is_admin) {
+      const d = el("button", "comment-del", "Supprimer"); d.type = "button";
+      d.onclick = async () => {
+        if (d.dataset.armed !== "1") { d.dataset.armed = "1"; d.textContent = "Confirmer"; d.classList.add("armed"); return; }
+        const r = await sb.from("photo_comments").delete().eq("id", c.id);
+        if (r.error) toast("Suppression impossible."); else refreshViewer();
+      };
+      row.append(d);
+    }
+    box.append(row);
+  }
+}
+
+$("vw-like").onclick = async () => {
+  const ph = viewing; if (!ph) return;
+  const btn = $("vw-like"), on = btn.classList.contains("on");
+  btn.disabled = true;
+  const r = on
+    ? await sb.from("photo_likes").delete().eq("photo_id", ph.id).eq("user_id", S.me.id)
+    : await sb.from("photo_likes").insert({ photo_id: ph.id });
+  if (r.error) toast("Action impossible.");
+  btn.disabled = false;
+  if (!on && !r.error) { btn.classList.add("pop"); setTimeout(() => btn.classList.remove("pop"), 400); }
+  refreshViewer();
+};
+
+$("vw-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const ph = viewing, body = $("vw-input").value.trim();
+  if (!ph || !body) return;
+  const btn = $("vw-send"); btn.disabled = true;
+  const r = await sb.from("photo_comments").insert({ photo_id: ph.id, body: body.slice(0, 500) });
+  btn.disabled = false;
+  if (r.error) { toast("Le commentaire n'a pas pu être publié."); return; }
+  $("vw-input").value = ""; refreshViewer();
+});
+
+$("vw-del").onclick = async () => {
+  const ph = viewing; if (!ph) return;
+  if (delArmed !== ph.id) { delArmed = ph.id; $("vw-del").textContent = "Confirmer la suppression"; return; }
+  const r = await sb.from("profile_photos").delete().eq("id", ph.id).select("id");
+  if (r.error || !r.data || !r.data.length) { toast("Suppression impossible."); return; }
+  sb.storage.from("avatars").remove([ph.path]);
+  const owner = S.profiles.get(ph.owner_id);
+  if (owner && owner.avatar_path === ph.path && ph.owner_id === S.me.id) await setAvatar(null);
+  toast("Photo supprimée"); closeViewer();
+};

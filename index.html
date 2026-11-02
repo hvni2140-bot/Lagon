@@ -75,11 +75,13 @@
       <section id="chat" class="chat">
         <header class="chat-head">
           <button class="back" id="btn-back" aria-label="Retour aux discussions">‹</button>
-          <div class="av" id="chat-av"></div>
-          <div class="grow">
-            <div class="chat-title" id="chat-title"></div>
-            <div class="muted small" id="chat-sub"></div>
-          </div>
+          <button class="head-btn" id="chat-head-btn" type="button">
+            <div class="av" id="chat-av"></div>
+            <div class="grow">
+              <div class="chat-title" id="chat-title"></div>
+              <div class="muted small" id="chat-sub"></div>
+            </div>
+          </button>
         </header>
         <div class="scroll" id="scroll"><div id="thread" class="thread"></div></div>
         <footer class="composer" id="composer">
@@ -130,12 +132,39 @@
               <input type="file" id="pf-file" accept="image/*" class="visually-hidden">
               <button class="btn soft" type="button" id="pf-remove" hidden>Retirer la photo</button>
             </div>
+            <button class="btn soft" type="button" id="pf-public">Voir mon profil et mes photos</button>
           </div>
           <form id="pf-form" class="card" novalidate>
             <label>Nom affiché<input id="pf-name" maxlength="40"></label>
             <p class="err" id="pf-err" hidden></p>
             <button class="btn" type="submit">Enregistrer le nom</button>
           </form>
+        </div>
+      </section>
+
+      <!-- Profil d'un membre -->
+      <section id="person" class="panel-view" hidden>
+        <header class="chat-head">
+          <button class="back show" id="person-back" aria-label="Retour">‹</button>
+          <div class="chat-title" id="person-title">Profil</div>
+        </header>
+        <div class="panel-body">
+          <div class="card profile-card">
+            <button class="av big tap" id="ps-av" type="button" aria-label="Voir la photo de profil"></button>
+            <b class="ps-name" id="ps-name"></b>
+            <span class="chip admin" id="ps-admin" hidden>Gérant</span>
+            <button class="btn" type="button" id="ps-dm">Envoyer un message</button>
+          </div>
+          <div class="seg" role="tablist">
+            <button id="ps-tab-avatar" role="tab" aria-selected="true">Photos de profil</button>
+            <button id="ps-tab-album" role="tab" aria-selected="false">Photos</button>
+          </div>
+          <div id="ps-add" hidden>
+            <label class="btn wide center" for="ps-file"><span id="ps-add-label">Ajouter des photos</span></label>
+            <input type="file" id="ps-file" accept="image/*" multiple class="visually-hidden">
+          </div>
+          <p class="err" id="ps-err" hidden></p>
+          <div id="ps-grid" class="gallery"></div>
         </div>
       </section>
 
@@ -186,6 +215,29 @@
       <p class="muted">Ouvrez le fichier <b>config.js</b> et collez l'adresse et la clé de votre projet Supabase. Le guide (README) explique où les trouver.</p>
     </div>
   </section>
+
+  <!-- Visionneuse photo : j'aime et commentaires -->
+  <div class="viewer" id="viewer" hidden role="dialog" aria-modal="true" aria-label="Photo">
+    <div class="viewer-box">
+      <header class="viewer-head">
+        <div class="av mini2" id="vw-av"></div>
+        <div class="grow"><b id="vw-name"></b><div class="muted small" id="vw-date"></div></div>
+        <button class="pill ghost" id="vw-close" type="button">Fermer</button>
+      </header>
+      <div class="viewer-img"><img id="vw-img" alt="Photo"></div>
+      <div class="viewer-actions">
+        <button class="like-btn" id="vw-like" type="button" aria-pressed="false"></button>
+        <span class="like-count"><span class="heart-dot"></span><b id="vw-count">0</b></span>
+        <button class="pill ghost danger-text" id="vw-del" type="button" hidden>Supprimer la photo</button>
+      </div>
+      <p class="muted small likers" id="vw-likers"></p>
+      <div class="comments" id="vw-comments"></div>
+      <form class="comment-form" id="vw-form" novalidate>
+        <input id="vw-input" maxlength="500" placeholder="Écrire un commentaire…" aria-label="Commentaire">
+        <button class="btn" id="vw-send" type="submit">Publier</button>
+      </form>
+    </div>
+  </div>
 
   <div class="toast" id="toast" hidden></div>
 </body>
