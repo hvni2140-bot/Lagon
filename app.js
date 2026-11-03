@@ -21,7 +21,7 @@ const S = {
 };
 const nodes = new Map();
 const urlCache = new Map();
-let pending = [], stickBottom = true, confirmTimer = null, toastTimer = null, entering = false, channel = null;
+let pending = [], stickBottom = true, confirmTimer = null, toastTimer = null, entering = false, channel = null, pollTimer = null, convTimer = null;
 
 /* ---------- utilitaires ---------- */
 function toast(t) { const e = $("toast"); e.textContent = t; e.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => (e.hidden = true), 2600); }
@@ -190,6 +190,7 @@ function showAuth() {
   $("terms").hidden = true; $("pending").hidden = true;
   S.me = null; entering = false;
   if (channel) { sb.removeChannel(channel); channel = null; }
+  stopPolling();
   $("app").hidden = true; $("auth").hidden = false;
 }
 
@@ -250,6 +251,11 @@ async function loadConvs() {
     if (data && data[0]) S.last.set(c.id, data[0]);
   }));
   computeUnread();
+  if (S.pollSince == null) {
+    let mx = new Date(0).toISOString();
+    for (const [, mm] of S.last) if (mm.created_at > mx) mx = mm.created_at;
+    S.pollSince = mx;
+  }
   renderConvs();
 }
 
@@ -259,12 +265,34 @@ async function loadMessages(cid) {
   S.msgs.set(cid, (data || []).reverse());
 }
 
-/* ---------- temps réel ---------- */
+/* ---------- temps réel + rafraîchissement régulier ---------- */
+// Le temps réel de Supabase prévient instantanément des nouveaux messages.
+// Par sécurité, on va aussi les chercher régulièrement : ainsi ils
+// apparaissent tout seuls même si le temps réel est momentanément coupé.
 function subscribe() {
   channel = sb.channel("lagon-messages")
-    .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (p) => onInsert(p.new))
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (p) => ingest(p.new))
     .on("postgres_changes", { event: "DELETE", schema: "public", table: "messages" }, (p) => onDelete(p.old))
     .subscribe();
+  startPolling();
+}
+function startPolling() {
+  clearInterval(pollTimer); clearInterval(convTimer);
+  pollTimer = setInterval(pollNew, 5000);        // nouveaux messages toutes les 5 s
+  convTimer = setInterval(() => { if (!document.hidden && S.me) loadConvs(); }, 20000); // nouvelles discussions
+}
+function stopPolling() { clearInterval(pollTimer); clearInterval(convTimer); pollTimer = convTimer = null; }
+
+async function pollNew() {
+  if (!S.me || document.hidden) return;
+  const ids = S.convs.map((c) => c.id);
+  if (!ids.length) return;
+  const since = S.pollSince || new Date(Date.now() - 86400000).toISOString();
+  const { data, error } = await sb.from("messages").select("*")
+    .in("conversation_id", ids).gt("created_at", since)
+    .order("created_at", { ascending: true }).limit(200);
+  if (error || !data) return;
+  for (const m of data) await ingest(m);
 }
 
 /* ---------- messages non lus (mémorisés sur l'appareil) ---------- */
@@ -287,7 +315,10 @@ function computeUnread() {
   }
 }
 
-async function onInsert(m) {
+async function ingest(m) {
+  if (m.created_at && (!S.pollSince || m.created_at > S.pollSince)) S.pollSince = m.created_at;
+  const known = S.msgs.get(m.conversation_id);
+  if (known && known.some((x) => x.id === m.id)) return; // déjà affiché, on évite les doublons
   if (!findConv(m.conversation_id)) await loadConvs();
   if (!S.profiles.has(m.sender_id)) await loadProfiles();
   addMessage(m);
@@ -321,6 +352,7 @@ function onDelete(old) {
 }
 
 document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) { pollNew(); if (S.me) loadConvs(); }
   if (!document.hidden && S.current && S.view === "chat") { markRead(S.current); renderConvs(); }
 });
 
